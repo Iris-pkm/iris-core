@@ -10,6 +10,7 @@
 pub mod cache;
 pub mod engine;
 pub mod error;
+pub mod export;
 pub mod git;
 pub mod import;
 pub mod integrity;
