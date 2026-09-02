@@ -9,6 +9,7 @@
 
 pub mod cache;
 pub mod error;
+pub mod git;
 pub mod parser;
 pub mod types;
 pub mod vault;
