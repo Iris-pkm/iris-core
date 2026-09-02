@@ -11,6 +11,7 @@ pub mod cache;
 pub mod engine;
 pub mod error;
 pub mod git;
+pub mod import;
 pub mod integrity;
 pub mod parser;
 pub mod search;
