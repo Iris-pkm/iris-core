@@ -1,0 +1,242 @@
+//! SQLite cache — a derived, rebuildable index of the vault (ADR-002).
+//!
+//! The cache is never the source of truth. It can be deleted and rebuilt from
+//! the vault at any time with no data loss — `rebuild()` is the only way rows
+//! get into it.
+
+use std::path::Path;
+
+use rusqlite::Connection;
+
+use crate::error::{IrisError, IrisResult};
+use crate::vault::Vault;
+
+/// A derived cache row for one node — just enough to prove the cache reflects
+/// the vault; richer queries (search, relation lookups) build on this later.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedNode {
+    pub id: String,
+    pub node_type: String,
+    pub path: String,
+}
+
+pub struct Cache {
+    conn: Connection,
+}
+
+impl Cache {
+    /// Open (or create) a cache database file.
+    pub fn open(path: impl AsRef<Path>) -> IrisResult<Self> {
+        let conn = Connection::open(path).map_err(sqlite_err)?;
+        let cache = Cache { conn };
+        cache.create_schema()?;
+        Ok(cache)
+    }
+
+    /// An in-memory cache, for tests.
+    pub fn open_in_memory() -> IrisResult<Self> {
+        let conn = Connection::open_in_memory().map_err(sqlite_err)?;
+        let cache = Cache { conn };
+        cache.create_schema()?;
+        Ok(cache)
+    }
+
+    fn create_schema(&self) -> IrisResult<()> {
+        self.conn
+            .execute_batch(
+                "
+                CREATE TABLE IF NOT EXISTS nodes (
+                    id        TEXT PRIMARY KEY,
+                    node_type TEXT NOT NULL,
+                    path      TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS relations (
+                    source_id TEXT NOT NULL,
+                    rel_type  TEXT NOT NULL,
+                    target_id TEXT NOT NULL
+                );
+                ",
+            )
+            .map_err(sqlite_err)
+    }
+
+    /// Wipe the cache and rebuild it from scratch by re-scanning and re-parsing
+    /// the vault. Proves the cache is purely derived (ARCHITECTURE.md §16).
+    pub fn rebuild(&mut self, vault: &Vault) -> IrisResult<()> {
+        let tx = self.conn.transaction().map_err(sqlite_err)?;
+        tx.execute("DELETE FROM nodes", []).map_err(sqlite_err)?;
+        tx.execute("DELETE FROM relations", []).map_err(sqlite_err)?;
+
+        for path in vault.scan()? {
+            let parsed = vault.read_node(&path)?;
+            let rel_path = path
+                .strip_prefix(vault.root())
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .into_owned();
+            let node_type = node_type_str(&parsed.node.node_type);
+
+            tx.execute(
+                "INSERT INTO nodes (id, node_type, path) VALUES (?1, ?2, ?3)",
+                (&parsed.node.id, &node_type, &rel_path),
+            )
+            .map_err(sqlite_err)?;
+
+            for rel in &parsed.node.relations {
+                tx.execute(
+                    "INSERT INTO relations (source_id, rel_type, target_id) VALUES (?1, ?2, ?3)",
+                    (&parsed.node.id, &rel.rel_type, &rel.target),
+                )
+                .map_err(sqlite_err)?;
+            }
+        }
+
+        tx.commit().map_err(sqlite_err)
+    }
+
+    /// All cached nodes, ordered by id (deterministic, for comparison/testing).
+    pub fn list_nodes(&self) -> IrisResult<Vec<CachedNode>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, node_type, path FROM nodes ORDER BY id")
+            .map_err(sqlite_err)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(CachedNode {
+                    id: row.get(0)?,
+                    node_type: row.get(1)?,
+                    path: row.get(2)?,
+                })
+            })
+            .map_err(sqlite_err)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_err)
+    }
+}
+
+fn node_type_str(node_type: &crate::types::NodeType) -> String {
+    serde_yaml::to_string(node_type)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn sqlite_err(e: rusqlite::Error) -> IrisError {
+    IrisError::Vault(format!("cache error: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("iris-cache-test-{label}-{nanos}"));
+            fs::create_dir_all(&path).unwrap();
+            TempDir(path)
+        }
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const NOTE: &str = "\
+---
+id: 01JQZ8XYABCDEF0123456789AB
+type: note
+created: 2026-01-15T09:30:00Z
+modified: 2026-01-15T09:30:00Z
+schema_version: 1
+---
+
+Hello.
+";
+
+    const TASK: &str = "\
+---
+id: 01JQZ8TASKID000000000000EF
+type: task
+created: 2026-01-15T10:00:00Z
+modified: 2026-01-15T10:00:00Z
+schema_version: 1
+relations:
+  - type: parent_project
+    target: 01JQZ8PROJECTID0000000000AB
+---
+
+Do the thing.
+";
+
+    #[test]
+    fn rebuild_populates_nodes_and_relations() {
+        let dir = TempDir::new("rebuild");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault.write_node("tasks/b.md", TASK).unwrap();
+
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+
+        let nodes = cache.list_nodes().unwrap();
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].id, "01JQZ8TASKID000000000000EF");
+        assert_eq!(nodes[0].node_type, "task");
+        assert_eq!(nodes[1].id, "01JQZ8XYABCDEF0123456789AB");
+        assert_eq!(nodes[1].node_type, "note");
+
+        let rel_count: i64 = cache
+            .conn
+            .query_row("SELECT COUNT(*) FROM relations", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rel_count, 1);
+    }
+
+    #[test]
+    fn full_cycle_rebuild_is_identical() {
+        // Wipe cache, rebuild from vault, assert identical state to a fresh
+        // rebuild — proves the cache is purely derived (ARCHITECTURE.md §16).
+        let dir = TempDir::new("full-cycle");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault.write_node("tasks/b.md", TASK).unwrap();
+
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+        let first = cache.list_nodes().unwrap();
+
+        // Simulate "wipe and rebuild": rebuild() already clears tables first,
+        // so calling it again from the same vault state must reproduce the
+        // exact same rows.
+        cache.rebuild(&vault).unwrap();
+        let second = cache.list_nodes().unwrap();
+
+        assert_eq!(first, second, "rebuild must be deterministic");
+    }
+
+    #[test]
+    fn open_creates_file_and_schema() {
+        let dir = TempDir::new("open-file");
+        let db_path = dir.path().join("cache.sqlite");
+        let cache = Cache::open(&db_path).unwrap();
+        assert!(db_path.exists());
+        assert_eq!(cache.list_nodes().unwrap().len(), 0);
+    }
+}
