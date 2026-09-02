@@ -68,7 +68,11 @@ impl Cache {
         tx.execute("DELETE FROM relations", []).map_err(sqlite_err)?;
 
         for path in vault.scan()? {
-            let parsed = vault.read_node(&path)?;
+            // A malformed file is quarantined (skipped), never allowed to abort
+            // the rebuild — one broken file degrades only itself.
+            let Ok(parsed) = vault.read_node(&path) else {
+                continue;
+            };
             let rel_path = path
                 .strip_prefix(vault.root())
                 .unwrap_or(&path)
@@ -184,6 +188,30 @@ relations:
 
 Do the thing.
 ";
+
+    const MALFORMED: &str = "\
+---
+id: [this is not valid yaml for a string
+type: note
+---
+
+broken.
+";
+
+    #[test]
+    fn rebuild_skips_malformed_file_without_aborting() {
+        let dir = TempDir::new("malformed");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/good.md", NOTE).unwrap();
+        vault.write_node("notes/bad.md", MALFORMED).unwrap();
+
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+
+        let nodes = cache.list_nodes().unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, "01JQZ8XYABCDEF0123456789AB");
+    }
 
     #[test]
     fn rebuild_populates_nodes_and_relations() {
