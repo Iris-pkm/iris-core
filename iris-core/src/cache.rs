@@ -11,13 +11,20 @@ use rusqlite::Connection;
 use crate::error::{IrisError, IrisResult};
 use crate::vault::Vault;
 
-/// A derived cache row for one node — just enough to prove the cache reflects
-/// the vault; richer queries (search, relation lookups) build on this later.
+/// A derived cache row for one node — enough to prove the cache reflects the
+/// vault and to power basic task-view queries (ARCHITECTURE.md §12); richer
+/// queries (search, full relation lookups) build on this later.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedNode {
     pub id: String,
     pub node_type: String,
     pub path: String,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub scheduled_date: Option<String>,
+    pub due_date: Option<String>,
+    pub deleted_at: Option<String>,
+    pub has_project: bool,
 }
 
 pub struct Cache {
@@ -46,9 +53,15 @@ impl Cache {
             .execute_batch(
                 "
                 CREATE TABLE IF NOT EXISTS nodes (
-                    id        TEXT PRIMARY KEY,
-                    node_type TEXT NOT NULL,
-                    path      TEXT NOT NULL
+                    id             TEXT PRIMARY KEY,
+                    node_type      TEXT NOT NULL,
+                    path           TEXT NOT NULL,
+                    status         TEXT,
+                    priority       TEXT,
+                    scheduled_date TEXT,
+                    due_date       TEXT,
+                    deleted_at     TEXT,
+                    has_project    INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS relations (
                     source_id TEXT NOT NULL,
@@ -79,10 +92,28 @@ impl Cache {
                 .to_string_lossy()
                 .into_owned();
             let node_type = node_type_str(&parsed.node.node_type);
+            let priority = parsed.node.priority.as_ref().map(priority_str);
+            let has_project = parsed
+                .node
+                .relations
+                .iter()
+                .any(|r| r.rel_type == "parent_project");
 
             tx.execute(
-                "INSERT INTO nodes (id, node_type, path) VALUES (?1, ?2, ?3)",
-                (&parsed.node.id, &node_type, &rel_path),
+                "INSERT INTO nodes
+                    (id, node_type, path, status, priority, scheduled_date, due_date, deleted_at, has_project)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    &parsed.node.id,
+                    &node_type,
+                    &rel_path,
+                    &parsed.node.status,
+                    &priority,
+                    parsed.node.scheduled_date.map(|d| d.to_string()),
+                    parsed.node.due_date.map(|d| d.to_string()),
+                    parsed.node.deleted_at.map(|d| d.to_rfc3339()),
+                    has_project as i64,
+                ],
             )
             .map_err(sqlite_err)?;
 
@@ -100,16 +131,29 @@ impl Cache {
 
     /// All cached nodes, ordered by id (deterministic, for comparison/testing).
     pub fn list_nodes(&self) -> IrisResult<Vec<CachedNode>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, node_type, path FROM nodes ORDER BY id")
-            .map_err(sqlite_err)?;
+        self.query_nodes("SELECT * FROM nodes ORDER BY id", [])
+    }
+
+    /// Run a `SELECT * FROM nodes WHERE ...` query and map every row to a `CachedNode`.
+    /// Shared by the public views (`views.rs`) so query text and row-mapping live once.
+    pub(crate) fn query_nodes<P: rusqlite::Params>(
+        &self,
+        sql: &str,
+        params: P,
+    ) -> IrisResult<Vec<CachedNode>> {
+        let mut stmt = self.conn.prepare(sql).map_err(sqlite_err)?;
         let rows = stmt
-            .query_map([], |row| {
+            .query_map(params, |row| {
                 Ok(CachedNode {
-                    id: row.get(0)?,
-                    node_type: row.get(1)?,
-                    path: row.get(2)?,
+                    id: row.get("id")?,
+                    node_type: row.get("node_type")?,
+                    path: row.get("path")?,
+                    status: row.get("status")?,
+                    priority: row.get("priority")?,
+                    scheduled_date: row.get("scheduled_date")?,
+                    due_date: row.get("due_date")?,
+                    deleted_at: row.get("deleted_at")?,
+                    has_project: row.get::<_, i64>("has_project")? != 0,
                 })
             })
             .map_err(sqlite_err)?;
@@ -119,6 +163,13 @@ impl Cache {
 
 fn node_type_str(node_type: &crate::types::NodeType) -> String {
     serde_yaml::to_string(node_type)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn priority_str(priority: &crate::types::Priority) -> String {
+    serde_yaml::to_string(priority)
         .unwrap_or_default()
         .trim()
         .to_string()

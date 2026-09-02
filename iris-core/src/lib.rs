@@ -15,3 +15,4 @@ pub mod integrity;
 pub mod parser;
 pub mod types;
 pub mod vault;
+pub mod views;
