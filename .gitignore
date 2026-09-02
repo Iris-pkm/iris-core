@@ -1,8 +1,7 @@
 # .gitignore
 docs/
 target/
-AI_CONTEXT.md
-graphify-out/
+.codegraph/
 .serena/
 .nodeterm/
 .DS_Store
