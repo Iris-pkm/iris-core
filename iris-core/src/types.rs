@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 /// A unique node identifier — a ULID (sortable by creation time).
 pub type NodeId = String;
 
+/// Generate a new node ID: a ULID, sortable by creation time (SCHEMA_SPEC §4).
+pub fn new_node_id() -> NodeId {
+    ulid::Ulid::new().to_string()
+}
+
 /// Schema version for format migration support (SCHEMA_SPEC §9).
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -220,4 +225,21 @@ pub struct Node {
 
 fn default_schema_version() -> u32 {
     CURRENT_SCHEMA_VERSION
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_node_id_is_a_valid_ulid() {
+        let id = new_node_id();
+        assert_eq!(id.len(), 26);
+        assert!(id.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn new_node_id_is_unique() {
+        assert_ne!(new_node_id(), new_node_id());
+    }
 }
