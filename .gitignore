@@ -1,0 +1,9 @@
+# .gitignore
+docs/
+target/
+AI_CONTEXT.md
+graphify-out/
+.serena/
+.nodeterm/
+.DS_Store
+.git-private/
