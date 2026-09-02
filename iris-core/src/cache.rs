@@ -25,6 +25,11 @@ pub struct CachedNode {
     pub due_date: Option<String>,
     pub deleted_at: Option<String>,
     pub has_project: bool,
+    pub domain: Option<String>,
+    /// Comma-joined tags (SQLite has no array type). See `search.rs` for how
+    /// tag filtering matches against this.
+    pub tags: String,
+    pub body: String,
 }
 
 pub struct Cache {
@@ -61,7 +66,10 @@ impl Cache {
                     scheduled_date TEXT,
                     due_date       TEXT,
                     deleted_at     TEXT,
-                    has_project    INTEGER NOT NULL DEFAULT 0
+                    has_project    INTEGER NOT NULL DEFAULT 0,
+                    domain         TEXT,
+                    tags           TEXT NOT NULL DEFAULT '',
+                    body           TEXT NOT NULL DEFAULT ''
                 );
                 CREATE TABLE IF NOT EXISTS relations (
                     source_id TEXT NOT NULL,
@@ -98,11 +106,13 @@ impl Cache {
                 .relations
                 .iter()
                 .any(|r| r.rel_type == "parent_project");
+            let tags = parsed.node.tags.join(",");
 
             tx.execute(
                 "INSERT INTO nodes
-                    (id, node_type, path, status, priority, scheduled_date, due_date, deleted_at, has_project)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    (id, node_type, path, status, priority, scheduled_date, due_date,
+                     deleted_at, has_project, domain, tags, body)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 rusqlite::params![
                     &parsed.node.id,
                     &node_type,
@@ -113,6 +123,9 @@ impl Cache {
                     parsed.node.due_date.map(|d| d.to_string()),
                     parsed.node.deleted_at.map(|d| d.to_rfc3339()),
                     has_project as i64,
+                    &parsed.node.domain,
+                    &tags,
+                    &parsed.body,
                 ],
             )
             .map_err(sqlite_err)?;
@@ -154,6 +167,9 @@ impl Cache {
                     due_date: row.get("due_date")?,
                     deleted_at: row.get("deleted_at")?,
                     has_project: row.get::<_, i64>("has_project")? != 0,
+                    domain: row.get("domain")?,
+                    tags: row.get("tags")?,
+                    body: row.get("body")?,
                 })
             })
             .map_err(sqlite_err)?;

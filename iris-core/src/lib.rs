@@ -13,6 +13,7 @@ pub mod error;
 pub mod git;
 pub mod integrity;
 pub mod parser;
+pub mod search;
 pub mod types;
 pub mod vault;
 pub mod views;
