@@ -10,12 +10,20 @@ use serde::{Deserialize, Serialize};
 pub type NodeId = String;
 
 /// Generate a new node ID: a ULID, sortable by creation time (SCHEMA_SPEC §4).
+#[uniffi::export]
 pub fn new_node_id() -> NodeId {
     ulid::Ulid::new().to_string()
 }
 
 /// Schema version for format migration support (SCHEMA_SPEC §9).
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+
+/// FFI-exposed accessor for `CURRENT_SCHEMA_VERSION` — UniFFI can't export a
+/// `const` directly, only functions.
+#[uniffi::export]
+pub fn current_schema_version() -> u32 {
+    CURRENT_SCHEMA_VERSION
+}
 
 // ---------------------------------------------------------------------------
 // Node type enum
