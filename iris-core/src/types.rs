@@ -54,7 +54,7 @@ pub enum NodeType {
 // Lifecycle (ADR-016)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, uniffi::Enum)]
 #[serde(rename_all = "snake_case")]
 pub enum Lifecycle {
     #[default]
@@ -66,7 +66,7 @@ pub enum Lifecycle {
 // Distillation level
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, uniffi::Enum)]
 #[serde(rename_all = "snake_case")]
 pub enum DistillationLevel {
     #[default]
@@ -105,7 +105,7 @@ pub fn sample_custom_node_type() -> NodeType {
 // Recurrence (provisional)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum Recurrence {
     Fixed { interval: String },
@@ -117,13 +117,13 @@ pub enum Recurrence {
 // Small supporting types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 pub struct ChecklistItem {
     pub text: String,
     pub done: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     Urgent,
@@ -132,7 +132,7 @@ pub enum Priority {
     Low,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectStatus {
     Someday,
