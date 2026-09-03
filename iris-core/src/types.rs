@@ -29,7 +29,7 @@ pub fn current_schema_version() -> u32 {
 // Node type enum
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "kebab-case")]
 pub enum NodeType {
     Note,
@@ -80,11 +80,25 @@ pub enum DistillationLevel {
 // Relations (ADR-017 — canonical direction only)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 pub struct Relation {
     #[serde(rename = "type")]
     pub rel_type: String,
     pub target: NodeId,
+}
+
+/// FFI spike (ADR-031): round-trips a `Relation` through the FFI boundary
+/// unchanged — proves UniFFI-derived structs work, not just primitives.
+#[uniffi::export]
+pub fn describe_relation(rel: Relation) -> String {
+    format!("{} -> {}", rel.rel_type, rel.target)
+}
+
+/// FFI spike (ADR-031): returns an enum with a data-carrying variant
+/// (`Custom(String)`) across the FFI boundary.
+#[uniffi::export]
+pub fn sample_custom_node_type() -> NodeType {
+    NodeType::Custom("trading-journal-entry".to_string())
 }
 
 // ---------------------------------------------------------------------------
