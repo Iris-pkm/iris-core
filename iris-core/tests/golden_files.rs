@@ -43,7 +43,8 @@ fn assert_round_trip(path: &str) {
     let serialized = parsed.serialize();
 
     assert_eq!(
-        serialized, contents,
+        serialized,
+        contents,
         "golden-file round-trip failed for {}",
         full_path.display()
     );

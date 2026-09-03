@@ -63,7 +63,16 @@ pub fn to_json(doc: &IdmDoc) -> IrisResult<String> {
 pub fn to_csv(docs: &[IdmDoc]) -> IrisResult<String> {
     let mut writer = csv::Writer::from_writer(Vec::new());
     writer
-        .write_record(["id", "node_type", "title", "domain", "tags", "created", "modified", "body_markdown"])
+        .write_record([
+            "id",
+            "node_type",
+            "title",
+            "domain",
+            "tags",
+            "created",
+            "modified",
+            "body_markdown",
+        ])
         .map_err(csv_err)?;
     for doc in docs {
         writer
@@ -79,8 +88,11 @@ pub fn to_csv(docs: &[IdmDoc]) -> IrisResult<String> {
             ])
             .map_err(csv_err)?;
     }
-    let bytes = writer.into_inner().map_err(|e| IrisError::Validation(format!("CSV export failed: {e}")))?;
-    String::from_utf8(bytes).map_err(|e| IrisError::Validation(format!("CSV export produced invalid UTF-8: {e}")))
+    let bytes = writer
+        .into_inner()
+        .map_err(|e| IrisError::Validation(format!("CSV export failed: {e}")))?;
+    String::from_utf8(bytes)
+        .map_err(|e| IrisError::Validation(format!("CSV export produced invalid UTF-8: {e}")))
 }
 
 /// Stage 1 — HTML: renders the markdown body via `pulldown-cmark`. Will later
@@ -106,7 +118,10 @@ pub fn to_pdf(_doc: &IdmDoc) -> IrisResult<Vec<u8>> {
 }
 
 fn node_type_str(node_type: &crate::types::NodeType) -> String {
-    serde_yaml::to_string(node_type).unwrap_or_default().trim().to_string()
+    serde_yaml::to_string(node_type)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 fn html_escape(s: &str) -> String {

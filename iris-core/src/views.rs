@@ -195,7 +195,11 @@ Body.
     fn today_includes_scheduled_and_overdue() {
         let dir = TempDir::new("today");
         let cache = setup(dir.path());
-        let ids: Vec<_> = today(&cache, jan15()).unwrap().into_iter().map(|n| n.id).collect();
+        let ids: Vec<_> = today(&cache, jan15())
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
         assert!(ids.contains(&"01JQZ8TODAY0000000000000C".to_string()));
         assert!(ids.contains(&"01JQZ8OVERDUE000000000000D".to_string()));
         assert!(!ids.contains(&"01JQZ8NEXTWEEK00000000000E".to_string()));
@@ -217,7 +221,11 @@ Body.
         let mut cache = Cache::open_in_memory().unwrap();
         cache.rebuild(&vault).unwrap();
 
-        let ids: Vec<_> = today(&cache, jan15()).unwrap().into_iter().map(|n| n.id).collect();
+        let ids: Vec<_> = today(&cache, jan15())
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
         assert!(!ids.contains(&"01JQZ8OVERDUEDONE0000000A".to_string()));
     }
 
@@ -249,7 +257,11 @@ Body.
     fn someday_maybe_has_no_dates() {
         let dir = TempDir::new("someday");
         let cache = setup(dir.path());
-        let ids: Vec<_> = someday_maybe(&cache).unwrap().into_iter().map(|n| n.id).collect();
+        let ids: Vec<_> = someday_maybe(&cache)
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
         assert!(ids.contains(&"01JQZ8INBOX0000000000000A".to_string()));
         assert!(ids.contains(&"01JQZ8PROJ00000000000000B".to_string()));
         assert!(!ids.contains(&"01JQZ8TODAY0000000000000C".to_string()));

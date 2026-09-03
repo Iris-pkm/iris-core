@@ -57,7 +57,12 @@ impl Engine {
     ///
     /// `body` is the exact content that follows the closing `---` (see
     /// `ParsedNode::body` for its precise semantics — typically starts with `\n`).
-    pub fn create_node(&mut self, rel_path: impl AsRef<Path>, node: &Node, body: &str) -> IrisResult<()> {
+    pub fn create_node(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        node: &Node,
+        body: &str,
+    ) -> IrisResult<()> {
         validate(node)?;
         let contents = render(node, body)?;
         self.vault.write_node(&rel_path, &contents)?;
@@ -211,7 +216,7 @@ mod tests {
         let engine = Engine::init(dir.path()).unwrap();
         assert!(dir.path().join(".git").is_dir());
         assert!(dir.path().join(".iris/cache.sqlite").exists());
-        assert_eq!(engine.check_integrity().unwrap().is_clean(), true);
+        assert!(engine.check_integrity().unwrap().is_clean());
     }
 
     #[test]

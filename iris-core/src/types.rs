@@ -46,32 +46,26 @@ pub enum NodeType {
 // Lifecycle (ADR-016)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Lifecycle {
+    #[default]
     Active,
     Archived,
-}
-
-impl Default for Lifecycle {
-    fn default() -> Self { Self::Active }
 }
 
 // ---------------------------------------------------------------------------
 // Distillation level
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DistillationLevel {
+    #[default]
     Raw,
     Bolded,
     Highlighted,
     Summarized,
-}
-
-impl Default for DistillationLevel {
-    fn default() -> Self { Self::Raw }
 }
 
 // ---------------------------------------------------------------------------

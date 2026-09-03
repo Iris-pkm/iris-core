@@ -70,9 +70,7 @@ impl GitRepo {
         };
         let mut revwalk = self.repo.revwalk().map_err(git_err)?;
         revwalk.push(head.id()).map_err(git_err)?;
-        revwalk
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(git_err)
+        revwalk.collect::<Result<Vec<_>, _>>().map_err(git_err)
     }
 
     fn head_commit(&self) -> Option<git2::Commit<'_>> {

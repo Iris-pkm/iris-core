@@ -86,7 +86,8 @@ impl Cache {
     pub fn rebuild(&mut self, vault: &Vault) -> IrisResult<()> {
         let tx = self.conn.transaction().map_err(sqlite_err)?;
         tx.execute("DELETE FROM nodes", []).map_err(sqlite_err)?;
-        tx.execute("DELETE FROM relations", []).map_err(sqlite_err)?;
+        tx.execute("DELETE FROM relations", [])
+            .map_err(sqlite_err)?;
 
         for path in vault.scan()? {
             // A malformed file is quarantined (skipped), never allowed to abort

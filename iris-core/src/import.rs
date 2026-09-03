@@ -78,7 +78,10 @@ fn import_one(
     // re-imported Iris file), reuse its tags and body. Otherwise the whole
     // file is the body and there are no tags.
     let (mut tags, body_text) = match ParsedNode::parse(&raw) {
-        Ok(parsed) => (parsed.node.tags, parsed.body.trim_start_matches('\n').to_string()),
+        Ok(parsed) => (
+            parsed.node.tags,
+            parsed.body.trim_start_matches('\n').to_string(),
+        ),
         Err(_) => (Vec::new(), raw.clone()),
     };
     tags.sort();
@@ -86,7 +89,14 @@ fn import_one(
 
     let id = id_by_stem
         .iter()
-        .find(|(stem, _)| Some(stem.as_str()) == path.file_stem().and_then(|s| s.to_str()).map(str::to_lowercase).as_deref())
+        .find(|(stem, _)| {
+            Some(stem.as_str())
+                == path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(str::to_lowercase)
+                    .as_deref()
+        })
         .map(|(_, id)| id.clone())
         .unwrap_or_else(new_node_id);
 
@@ -153,7 +163,12 @@ fn resolve_wikilinks(body: &str, id_by_stem: &[(String, String)]) -> Vec<Relatio
         let inner = &rest[..end];
         rest = &rest[end + 2..];
 
-        let target_name = inner.split(['|', '#']).next().unwrap_or(inner).trim().to_lowercase();
+        let target_name = inner
+            .split(['|', '#'])
+            .next()
+            .unwrap_or(inner)
+            .trim()
+            .to_lowercase();
         if let Some((_, id)) = id_by_stem.iter().find(|(stem, _)| *stem == target_name) {
             relations.push(Relation {
                 rel_type: "related-to".to_string(),
@@ -170,7 +185,10 @@ fn collect_md_files(dir: &Path) -> IrisResult<Vec<PathBuf>> {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+            if path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+            {
                 continue;
             }
             if path.is_dir() {
@@ -189,8 +207,14 @@ fn file_times(path: &Path) -> (DateTime<Utc>, DateTime<Utc>) {
         t.ok().and_then(|t| DateTime::<Utc>::from(t).into())
     };
     let now = Utc::now();
-    let created = meta.as_ref().and_then(|m| to_dt(m.created())).unwrap_or(now);
-    let modified = meta.as_ref().and_then(|m| to_dt(m.modified())).unwrap_or(now);
+    let created = meta
+        .as_ref()
+        .and_then(|m| to_dt(m.created()))
+        .unwrap_or(now);
+    let modified = meta
+        .as_ref()
+        .and_then(|m| to_dt(m.modified()))
+        .unwrap_or(now);
     (created, modified)
 }
 
@@ -251,15 +275,17 @@ mod tests {
             "This project links to [[Sync Design]] and [[Missing Note]].",
         )
         .unwrap();
-        fs::write(src.path().join("Sync Design.md"), "Naive sync first, CRDT later.").unwrap();
+        fs::write(
+            src.path().join("Sync Design.md"),
+            "Naive sync first, CRDT later.",
+        )
+        .unwrap();
 
         let mut engine = Engine::init(dst.path()).unwrap();
         let report = import_obsidian_vault(&mut engine, src.path()).unwrap();
         assert_eq!(report.imported, 2);
 
-        let project = engine
-            .read_node("imported/Project Iris.md")
-            .unwrap();
+        let project = engine.read_node("imported/Project Iris.md").unwrap();
         // Resolved: one relation to Sync Design. Missing Note is dropped (no target id).
         assert_eq!(project.node.relations.len(), 1);
         assert_eq!(project.node.relations[0].rel_type, "related-to");
@@ -282,7 +308,10 @@ mod tests {
         import_markdown_folder(&mut engine, src.path()).unwrap();
 
         let node = engine.read_node("imported/tagged.md").unwrap();
-        assert_eq!(node.node.tags, vec!["imported".to_string(), "test".to_string()]);
+        assert_eq!(
+            node.node.tags,
+            vec!["imported".to_string(), "test".to_string()]
+        );
         assert!(node.body.contains("Body here."));
     }
 }

@@ -48,7 +48,11 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
         match vault.read_node(&path) {
             Ok(node) => parsed.push(node),
             Err(e) => report.malformed_files.push(MalformedFile {
-                path: path.strip_prefix(vault.root()).unwrap_or(&path).to_string_lossy().into_owned(),
+                path: path
+                    .strip_prefix(vault.root())
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned(),
                 error: e.to_string(),
             }),
         }

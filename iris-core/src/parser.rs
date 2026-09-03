@@ -60,11 +60,7 @@ impl ParsedNode {
         // (so "---foo" doesn't count as an opening delimiter).
         let rest_after_open = rest_after_open
             .strip_prefix('\n')
-            .ok_or_else(|| {
-                IrisError::Parse(
-                    "expected newline after opening '---'".into(),
-                )
-            })?;
+            .ok_or_else(|| IrisError::Parse("expected newline after opening '---'".into()))?;
 
         // Find the closing "---" on its own line.
         let (raw_frontmatter, body) = split_on_closing_delimiter(rest_after_open)?;
@@ -94,9 +90,7 @@ impl ParsedNode {
     /// the closing `---` — typically `\n` for a normal file, or empty for
     /// a file that ends exactly at `---`.
     pub fn serialize(&self) -> String {
-        let mut out = String::with_capacity(
-            4 + self.raw_frontmatter.len() + 4 + self.body.len(),
-        );
+        let mut out = String::with_capacity(4 + self.raw_frontmatter.len() + 4 + self.body.len());
         out.push_str("---\n");
         out.push_str(&self.raw_frontmatter);
         out.push_str("\n---");
