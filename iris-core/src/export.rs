@@ -2,12 +2,20 @@
 //! (ADR-028). Every writer consumes the IDM; none re-parses markdown or
 //! re-resolves attachments independently.
 //!
-//! **Stage 1 scope, honestly stated:** JSON, CSV, and HTML are real, working
-//! writers. PDF is a documented stub — ADR-028 specifies PDF via an embedded
-//! Typst layout engine, which is a substantial subsystem of its own (fonts,
-//! page layout, a `World` trait implementation) and genuinely out of scope
-//! for this pass. `to_pdf` returns a clear "not implemented" error rather
-//! than silently producing nothing or a half-correct PDF.
+//! **Stage 1 scope, honestly stated:** JSON, CSV, HTML, and PDF are all real,
+//! working writers now. PDF renders via an embedded Typst compiler
+//! (`typst-as-lib`, pinned to the same 0.15.x line as `typst`/`typst-pdf`;
+//! `typst-kit`'s embedded fonts, system font scanning off, so the build has
+//! no runtime font dependency) — `body_markdown` is converted to Typst markup
+//! by walking `pulldown-cmark`'s event stream (see `markdown_to_typst`), not
+//! by re-parsing markdown a second time. Coverage matches the writer, not the
+//! full Tier A rich-editing surface (ADR-027): headings, paragraphs,
+//! bold/italic/strikethrough, inline code, fenced code blocks, links,
+//! ordered/unordered lists (nesting via indent), block quotes, rules. Known
+//! gaps, honestly flagged rather than silently mishandled: tables, math, and
+//! images/attachments (no Tier-B resolution exists yet) fall back to a
+//! visible placeholder rather than being dropped silently; an inline code
+//! span containing a backtick is not escaped correctly (rare in practice).
 //!
 //! No attachments/Tier-B sidecar artifacts exist yet, so the IDM here is
 //! just a node's resolved frontmatter + markdown body — it will need to grow
@@ -16,7 +24,11 @@
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde::Serialize;
+use typst_as_lib::typst_kit_options::TypstKitFontOptions;
+use typst_as_lib::TypstEngine;
+use typst_layout::PagedDocument;
 
 use crate::error::{IrisError, IrisResult};
 use crate::parser::ParsedNode;
@@ -110,11 +122,138 @@ pub fn to_html(doc: &IdmDoc) -> String {
     )
 }
 
-/// Stage 1 — PDF via embedded Typst. **Not implemented** — see module docs.
-pub fn to_pdf(_doc: &IdmDoc) -> IrisResult<Vec<u8>> {
-    Err(IrisError::Validation(
-        "PDF export is not implemented yet — needs an embedded Typst integration (ADR-028)".into(),
-    ))
+/// Stage 1 — PDF via an embedded Typst compiler (ADR-028). Builds a Typst
+/// source document from the IDM (title heading + converted body) and
+/// compiles it in-process — no external `typst` binary, no shelling out.
+pub fn to_pdf(doc: &IdmDoc) -> IrisResult<Vec<u8>> {
+    let source = format!(
+        "#set page(margin: 1.75in)\n#set text(size: 11pt)\n= {}\n\n{}",
+        escape_typst_text(&doc.title),
+        markdown_to_typst(&doc.body_markdown)
+    );
+
+    let engine = TypstEngine::builder()
+        .main_file(source)
+        .search_fonts_with(TypstKitFontOptions::new().include_system_fonts(false))
+        .build();
+
+    let compiled = engine.compile::<PagedDocument>();
+    let typst_doc = compiled
+        .output
+        .map_err(|e| IrisError::Validation(format!("PDF export failed to compile: {e:?}")))?;
+
+    typst_pdf::pdf(&typst_doc, &Default::default())
+        .map_err(|e| IrisError::Validation(format!("PDF export failed to render: {e:?}")))
+}
+
+/// Converts a markdown body to Typst markup by walking `pulldown-cmark`'s
+/// event stream once — reuses the same parse the HTML writer relies on
+/// rather than hand-rolling a second markdown parser.
+fn markdown_to_typst(markdown: &str) -> String {
+    let parser = Parser::new_ext(markdown, Options::ENABLE_STRIKETHROUGH);
+    let mut out = String::new();
+    // Typst's "+"/"-" list markers only start a list at the beginning of a
+    // line; track nesting depth so items indent instead of colliding.
+    let mut list_depth: Vec<Option<u64>> = Vec::new();
+
+    for event in parser {
+        match event {
+            Event::Start(tag) => match tag {
+                Tag::Heading { level, .. } => {
+                    let n = match level {
+                        HeadingLevel::H1 => 1,
+                        HeadingLevel::H2 => 2,
+                        HeadingLevel::H3 => 3,
+                        HeadingLevel::H4 => 4,
+                        HeadingLevel::H5 => 5,
+                        HeadingLevel::H6 => 6,
+                    };
+                    out.push_str(&"=".repeat(n));
+                    out.push(' ');
+                }
+                Tag::Paragraph => {}
+                Tag::Strong => out.push('*'),
+                Tag::Emphasis => out.push('_'),
+                Tag::Strikethrough => out.push_str("#strike["),
+                Tag::CodeBlock(kind) => {
+                    out.push_str("```");
+                    if let CodeBlockKind::Fenced(lang) = kind {
+                        out.push_str(&lang);
+                    }
+                    out.push('\n');
+                }
+                Tag::BlockQuote(_) => out.push_str("#quote(block: true)["),
+                Tag::List(start) => list_depth.push(start),
+                Tag::Item => {
+                    out.push('\n');
+                    out.push_str(&"  ".repeat(list_depth.len().saturating_sub(1)));
+                    match list_depth.last() {
+                        Some(Some(_)) => out.push_str("+ "),
+                        _ => out.push_str("- "),
+                    }
+                }
+                Tag::Link { dest_url, .. } => {
+                    out.push_str("#link(\"");
+                    out.push_str(&dest_url.replace('\\', "\\\\").replace('"', "\\\""));
+                    out.push_str("\")[");
+                }
+                Tag::Image { .. } => out.push_str("#emph[[image: "),
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Heading(_) => out.push_str("\n\n"),
+                TagEnd::Paragraph => out.push_str("\n\n"),
+                TagEnd::Strong => out.push('*'),
+                TagEnd::Emphasis => out.push('_'),
+                TagEnd::Strikethrough => out.push(']'),
+                TagEnd::CodeBlock => out.push_str("```\n\n"),
+                TagEnd::BlockQuote(_) => out.push_str("]\n\n"),
+                TagEnd::List(_) => {
+                    list_depth.pop();
+                    out.push('\n');
+                    if list_depth.is_empty() {
+                        out.push('\n');
+                    }
+                }
+                TagEnd::Item => {}
+                TagEnd::Link => out.push(']'),
+                TagEnd::Image => out.push_str("]]"),
+                _ => {}
+            },
+            Event::Text(text) => out.push_str(&escape_typst_text(&text)),
+            Event::Code(text) => {
+                out.push('`');
+                out.push_str(&text);
+                out.push('`');
+            }
+            Event::SoftBreak => out.push(' '),
+            Event::HardBreak => out.push_str(" #linebreak()\n"),
+            Event::Rule => out.push_str("\n#line(length: 100%)\n\n"),
+            _ => {}
+        }
+    }
+
+    out
+}
+
+/// Escapes Typst markup-significant characters in plain text so note content
+/// renders as literal text rather than being interpreted as markup. Known
+/// gap: a `-`/`+`/digit-`.` sequence at the start of a text run inside a
+/// paragraph (not one of our own list items) can still be read as a list
+/// marker by Typst — rare in practice, not worth a stateful line-start
+/// tracker for this pass.
+fn escape_typst_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if matches!(
+            c,
+            '\\' | '#' | '*' | '_' | '$' | '<' | '>' | '@' | '[' | ']' | '`' | '~'
+        ) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn node_type_str(node_type: &crate::types::NodeType) -> String {
@@ -229,10 +368,29 @@ Markets **overreact** to fear.
     }
 
     #[test]
-    fn pdf_is_a_clear_not_implemented_error() {
+    fn pdf_compiles_to_a_valid_pdf() {
         let dir = TempDir::new("pdf");
         let doc = sample_doc(dir.path());
-        let err = to_pdf(&doc).unwrap_err();
-        assert!(err.to_string().contains("not implemented"));
+        let pdf = to_pdf(&doc).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(pdf.len() > 100);
+    }
+
+    #[test]
+    fn markdown_to_typst_converts_common_constructs() {
+        let typst =
+            markdown_to_typst("# Heading\n\n**bold** and *italic* and `code`.\n\n- one\n- two\n");
+        assert!(typst.contains("= Heading"));
+        assert!(typst.contains("*bold*"));
+        assert!(typst.contains("_italic_"));
+        assert!(typst.contains("`code`"));
+        assert!(typst.contains("- one"));
+        assert!(typst.contains("- two"));
+    }
+
+    #[test]
+    fn markdown_to_typst_escapes_special_characters() {
+        let typst = markdown_to_typst("Cost is #5 per item.");
+        assert!(typst.contains("\\#5"));
     }
 }
