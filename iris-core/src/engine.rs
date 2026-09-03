@@ -77,6 +77,32 @@ impl Engine {
         self.vault.read_node(rel_path)
     }
 
+    /// Tier 1 template instantiation (DECISION_LOG.md ADR-026): copy a node
+    /// flagged `is_template: true` at `template_rel_path` into a brand-new,
+    /// independent node at `new_rel_path`. The copy gets a fresh id and fresh
+    /// `created`/`modified` timestamps, `is_template: false`, and is otherwise
+    /// identical (body included). No link to the template is kept — later
+    /// edits to the template never affect the copy.
+    pub fn instantiate_template(
+        &mut self,
+        template_rel_path: impl AsRef<Path>,
+        new_rel_path: impl AsRef<Path>,
+    ) -> IrisResult<()> {
+        let template = self.vault.read_node(&template_rel_path)?;
+        if !template.node.is_template {
+            return Err(IrisError::Validation(format!(
+                "{} is not a template (is_template is false)",
+                template_rel_path.as_ref().display()
+            )));
+        }
+        let mut node = template.node.clone();
+        node.id = crate::types::new_node_id();
+        node.created = Utc::now();
+        node.modified = node.created;
+        node.is_template = false;
+        self.create_node(new_rel_path, &node, &template.body)
+    }
+
     /// Replace a node's frontmatter, preserving its body byte-for-byte.
     ///
     /// Note: this re-serializes the *frontmatter* from `node` — comments, key
@@ -281,5 +307,44 @@ mod tests {
         let mut node = sample_node();
         node.id = "".to_string();
         assert!(engine.create_node("notes/a.md", &node, "\n").is_err());
+    }
+
+    #[test]
+    fn instantiate_template_copies_with_new_id_and_clears_flag() {
+        let dir = TempDir::new("template");
+        let mut engine = Engine::init(dir.path()).unwrap();
+
+        let mut template = sample_node();
+        template.is_template = true;
+        let template_id = template.id.clone();
+        engine
+            .create_node("templates/daily.md", &template, "\n\nTemplate body.\n")
+            .unwrap();
+
+        engine
+            .instantiate_template("templates/daily.md", "notes/today.md")
+            .unwrap();
+
+        let copy = engine.read_node("notes/today.md").unwrap();
+        assert_ne!(copy.node.id, template_id);
+        assert!(!copy.node.is_template);
+        assert!(copy.body.contains("Template body."));
+
+        // Original template is untouched.
+        let original = engine.read_node("templates/daily.md").unwrap();
+        assert_eq!(original.node.id, template_id);
+        assert!(original.node.is_template);
+    }
+
+    #[test]
+    fn instantiate_template_rejects_non_template_source() {
+        let dir = TempDir::new("template-reject");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let node = sample_node();
+        engine.create_node("notes/a.md", &node, "\n").unwrap();
+
+        assert!(engine
+            .instantiate_template("notes/a.md", "notes/b.md")
+            .is_err());
     }
 }

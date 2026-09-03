@@ -13,7 +13,7 @@ use chrono::NaiveDate;
 use crate::cache::{Cache, CachedNode};
 use crate::error::IrisResult;
 
-const TASK_BASE: &str = "node_type = 'task' AND deleted_at IS NULL";
+const TASK_BASE: &str = "node_type = 'task' AND deleted_at IS NULL AND is_template = 0";
 
 /// Freshly captured tasks with no project (ARCHITECTURE.md §12: `project = null`).
 pub fn inbox(cache: &Cache) -> IrisResult<Vec<CachedNode>> {

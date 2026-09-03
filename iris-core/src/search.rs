@@ -16,10 +16,11 @@ pub struct SearchFilters<'a> {
 
 /// Search by `query` (matched against path and body, case-insensitive substring),
 /// narrowed by `filters`. An empty `query` returns everything matching the filters.
-/// Excludes soft-deleted nodes.
+/// Excludes soft-deleted and template nodes (DECISION_LOG.md ADR-026 Tier 1:
+/// templates are excluded from normal views/search).
 pub fn search(cache: &Cache, query: &str, filters: &SearchFilters) -> IrisResult<Vec<CachedNode>> {
     cache.query_nodes(
-        "SELECT * FROM nodes WHERE deleted_at IS NULL
+        "SELECT * FROM nodes WHERE deleted_at IS NULL AND is_template = 0
            AND (?1 = '' OR path LIKE '%' || ?1 || '%' COLLATE NOCASE
                          OR body LIKE '%' || ?1 || '%' COLLATE NOCASE)
            AND (?2 IS NULL OR node_type = ?2)
@@ -110,6 +111,34 @@ tags: [{tags}]
         let mut cache = Cache::open_in_memory().unwrap();
         cache.rebuild(&vault).unwrap();
         cache
+    }
+
+    #[test]
+    fn search_excludes_template_nodes() {
+        let dir = TempDir::new("template-exclude");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault
+            .write_node(
+                "templates/daily.md",
+                "\
+---
+id: 01JQZ8TEMPLATE00000000000A
+type: note
+created: 2026-01-15T09:30:00Z
+modified: 2026-01-15T09:30:00Z
+schema_version: 1
+is_template: true
+---
+
+A template note.
+",
+            )
+            .unwrap();
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+
+        let results = search(&cache, "", &SearchFilters::default()).unwrap();
+        assert!(results.is_empty());
     }
 
     #[test]

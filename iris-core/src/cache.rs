@@ -30,6 +30,7 @@ pub struct CachedNode {
     /// tag filtering matches against this.
     pub tags: String,
     pub body: String,
+    pub is_template: bool,
 }
 
 pub struct Cache {
@@ -69,7 +70,8 @@ impl Cache {
                     has_project    INTEGER NOT NULL DEFAULT 0,
                     domain         TEXT,
                     tags           TEXT NOT NULL DEFAULT '',
-                    body           TEXT NOT NULL DEFAULT ''
+                    body           TEXT NOT NULL DEFAULT '',
+                    is_template    INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS relations (
                     source_id TEXT NOT NULL,
@@ -112,8 +114,8 @@ impl Cache {
             tx.execute(
                 "INSERT INTO nodes
                     (id, node_type, path, status, priority, scheduled_date, due_date,
-                     deleted_at, has_project, domain, tags, body)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                     deleted_at, has_project, domain, tags, body, is_template)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 rusqlite::params![
                     &parsed.node.id,
                     &node_type,
@@ -127,6 +129,7 @@ impl Cache {
                     &parsed.node.domain,
                     &tags,
                     &parsed.body,
+                    parsed.node.is_template as i64,
                 ],
             )
             .map_err(sqlite_err)?;
@@ -171,6 +174,7 @@ impl Cache {
                     domain: row.get("domain")?,
                     tags: row.get("tags")?,
                     body: row.get("body")?,
+                    is_template: row.get::<_, i64>("is_template")? != 0,
                 })
             })
             .map_err(sqlite_err)?;
