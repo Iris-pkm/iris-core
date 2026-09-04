@@ -338,6 +338,47 @@ impl Engine {
         self.vault.root()
     }
 
+    /// Tag the current HEAD as a named checkpoint (ARCHITECTURE.md §5).
+    pub fn create_checkpoint(&self, name: &str) -> IrisResult<()> {
+        self.git.create_checkpoint(name)?;
+        Ok(())
+    }
+
+    /// Checkpoint names, alphabetically.
+    pub fn list_checkpoints(&self) -> IrisResult<Vec<String>> {
+        self.git.list_checkpoints()
+    }
+
+    /// Branch off the current HEAD, without switching to it — "try a
+    /// different reorganization without committing to it" (ARCHITECTURE.md §5).
+    pub fn create_branch(&self, name: &str) -> IrisResult<()> {
+        self.git.create_branch(name)
+    }
+
+    /// Local branch names, alphabetically.
+    pub fn list_branches(&self) -> IrisResult<Vec<String>> {
+        self.git.list_branches()
+    }
+
+    /// The current branch's name, or `None` if HEAD is detached (e.g. after
+    /// checking out a checkpoint tag).
+    pub fn current_branch(&self) -> IrisResult<Option<String>> {
+        self.git.current_branch()
+    }
+
+    /// Switch the working vault to a branch or checkpoint tag, then rebuild
+    /// the cache to match the files that are now on disk. Clears the
+    /// undo/redo stacks: their captured "before" states describe content on
+    /// the branch you just left, so keeping them could silently overwrite
+    /// files with content from a different line of history.
+    pub fn checkout(&mut self, name: &str) -> IrisResult<()> {
+        self.git.checkout(name)?;
+        self.rebuild_cache()?;
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        Ok(())
+    }
+
     /// Write a node's canonical file, rebuild the cache, and commit — the
     /// shared core of every mutating operation (ADR-021's ordering), without
     /// touching the undo/redo stacks (callers push their own entries, since
@@ -541,6 +582,55 @@ mod tests {
         // git history: create + update + delete = 3 commits
         assert_eq!(engine.git.history().unwrap().len(), 3);
         assert!(engine.git.status().unwrap().is_empty());
+    }
+
+    #[test]
+    fn checkpoint_and_branch_round_trip_through_checkout() {
+        let dir = TempDir::new("checkpoint");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\noriginal\n")
+            .unwrap();
+
+        engine.create_checkpoint("v1").unwrap();
+        assert_eq!(engine.list_checkpoints().unwrap(), vec!["v1".to_string()]);
+
+        let original_branch = engine.current_branch().unwrap().unwrap();
+        engine.create_branch("try-reorg").unwrap();
+        assert!(engine
+            .list_branches()
+            .unwrap()
+            .contains(&"try-reorg".to_string()));
+
+        engine.checkout("try-reorg").unwrap();
+        assert_eq!(
+            engine.current_branch().unwrap(),
+            Some("try-reorg".to_string())
+        );
+
+        let mut reorganized = engine.read_node("notes/a.md").unwrap().node;
+        reorganized.domain = Some("reorganized".to_string());
+        engine.update_node("notes/a.md", &reorganized).unwrap();
+        assert!(engine.can_undo());
+
+        // Switching back to the checkpoint restores the original content and
+        // clears the now-stale undo stack from the branch we just left.
+        engine.checkout("v1").unwrap();
+        assert_eq!(engine.current_branch().unwrap(), None); // detached at the tag
+        assert_eq!(engine.read_node("notes/a.md").unwrap().node.domain, None);
+        assert!(!engine.can_undo());
+        assert_eq!(engine.cache.list_nodes().unwrap().len(), 1);
+
+        engine.checkout(&original_branch).unwrap();
+        assert_eq!(
+            engine
+                .read_node("notes/a.md")
+                .unwrap()
+                .node
+                .domain
+                .as_deref(),
+            None
+        );
     }
 
     #[test]
