@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 
 use crate::error::IrisResult;
+use crate::types::NodeType;
 use crate::vault::Vault;
 
 /// A file whose frontmatter failed to parse.
@@ -24,22 +25,38 @@ pub struct DanglingRelation {
     pub target_id: String,
 }
 
+/// An `annotation` node whose anchor doesn't resolve — its `annotates`
+/// relation is missing or dangling, or its text-fragment anchor no longer
+/// appears in the target's body (ARCHITECTURE.md §4: "if neither [CRDT
+/// position nor text fragment] resolves, the annotation goes to an
+/// `orphaned` state"). A reply annotation (no text anchor, `annotates` a
+/// parent annotation) is never flagged here — it has nothing to resolve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrphanedAnnotation {
+    pub annotation_id: String,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IntegrityReport {
     pub malformed_files: Vec<MalformedFile>,
     pub dangling_relations: Vec<DanglingRelation>,
+    pub orphaned_annotations: Vec<OrphanedAnnotation>,
 }
 
 impl IntegrityReport {
     /// A known-good vault (the state the test-suite fixtures should always produce)
     /// yields zero issues.
     pub fn is_clean(&self) -> bool {
-        self.malformed_files.is_empty() && self.dangling_relations.is_empty()
+        self.malformed_files.is_empty()
+            && self.dangling_relations.is_empty()
+            && self.orphaned_annotations.is_empty()
     }
 }
 
-/// Walk the vault and report structural problems: malformed frontmatter and
-/// relations pointing at a node id that doesn't exist.
+/// Walk the vault and report structural problems: malformed frontmatter,
+/// relations pointing at a node id that doesn't exist, and annotations whose
+/// anchor no longer resolves.
 pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
     let mut report = IntegrityReport::default();
     let mut parsed = Vec::new();
@@ -67,6 +84,49 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
                     source_id: parsed_node.node.id.clone(),
                     rel_type: rel.rel_type.clone(),
                     target_id: rel.target.clone(),
+                });
+            }
+        }
+    }
+
+    for parsed_node in &parsed {
+        if parsed_node.node.node_type != NodeType::Annotation {
+            continue;
+        }
+
+        let annotates = parsed_node
+            .node
+            .relations
+            .iter()
+            .find(|r| r.rel_type == "annotates");
+        let Some(annotates) = annotates else {
+            report.orphaned_annotations.push(OrphanedAnnotation {
+                annotation_id: parsed_node.node.id.clone(),
+                reason: "no `annotates` relation".to_string(),
+            });
+            continue;
+        };
+
+        let Some(target) = parsed.iter().find(|p| p.node.id == annotates.target) else {
+            report.orphaned_annotations.push(OrphanedAnnotation {
+                annotation_id: parsed_node.node.id.clone(),
+                reason: format!("annotates target `{}` does not exist", annotates.target),
+            });
+            continue;
+        };
+
+        // No text anchor at all means nothing to resolve — a threaded reply,
+        // not an orphan (see doc comment on `OrphanedAnnotation`).
+        if let Some(fragment) = parsed_node
+            .node
+            .anchor
+            .as_ref()
+            .and_then(|a| a.text_fragment.as_deref())
+        {
+            if !target.body.contains(fragment) {
+                report.orphaned_annotations.push(OrphanedAnnotation {
+                    annotation_id: parsed_node.node.id.clone(),
+                    reason: "anchor text fragment not found in target body".to_string(),
                 });
             }
         }
@@ -170,6 +230,100 @@ broken.
             report.dangling_relations[0].target_id,
             "01JQZ8DOESNOTEXIST0000000A"
         );
+    }
+
+    #[test]
+    fn resolved_annotation_is_clean() {
+        let dir = TempDir::new("annotation-resolved");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault
+            .write_node(
+                "notes/comment.md",
+                "---\n\
+id: 01JQZ8ANNOTID00000000000AB\n\
+type: annotation\n\
+created: 2026-01-15T09:30:00Z\n\
+modified: 2026-01-15T09:30:00Z\n\
+schema_version: 1\n\
+resolved: false\n\
+anchor:\n  text_fragment: \"Hello.\"\n\
+relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
+---\n\nComment body.\n",
+            )
+            .unwrap();
+
+        let report = check(&vault).unwrap();
+        assert!(report.is_clean());
+    }
+
+    #[test]
+    fn annotation_with_unmatched_fragment_is_orphaned() {
+        let dir = TempDir::new("annotation-orphaned");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault
+            .write_node(
+                "notes/comment.md",
+                "---\n\
+id: 01JQZ8ANNOTID00000000000AB\n\
+type: annotation\n\
+created: 2026-01-15T09:30:00Z\n\
+modified: 2026-01-15T09:30:00Z\n\
+schema_version: 1\n\
+resolved: false\n\
+anchor:\n  text_fragment: \"text that was deleted\"\n\
+relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
+---\n\nComment body.\n",
+            )
+            .unwrap();
+
+        let report = check(&vault).unwrap();
+        assert!(!report.is_clean());
+        assert_eq!(report.orphaned_annotations.len(), 1);
+        assert_eq!(
+            report.orphaned_annotations[0].annotation_id,
+            "01JQZ8ANNOTID00000000000AB"
+        );
+    }
+
+    #[test]
+    fn threaded_reply_with_no_anchor_is_not_orphaned() {
+        let dir = TempDir::new("annotation-reply");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault
+            .write_node(
+                "notes/comment.md",
+                "---\n\
+id: 01JQZ8ANNOTID00000000000AB\n\
+type: annotation\n\
+created: 2026-01-15T09:30:00Z\n\
+modified: 2026-01-15T09:30:00Z\n\
+schema_version: 1\n\
+resolved: false\n\
+anchor:\n  text_fragment: \"Hello.\"\n\
+relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
+---\n\nComment body.\n",
+            )
+            .unwrap();
+        vault
+            .write_node(
+                "notes/reply.md",
+                "---\n\
+id: 01JQZ8REPLYID0000000000CD\n\
+type: annotation\n\
+created: 2026-01-15T09:31:00Z\n\
+modified: 2026-01-15T09:31:00Z\n\
+schema_version: 1\n\
+resolved: false\n\
+relations:\n  - type: annotates\n    target: 01JQZ8ANNOTID00000000000AB\n\
+---\n\nReply body.\n",
+            )
+            .unwrap();
+
+        let report = check(&vault).unwrap();
+        assert!(report.is_clean());
     }
 
     #[test]

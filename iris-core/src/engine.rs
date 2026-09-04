@@ -176,6 +176,67 @@ impl Engine {
         self.create_node(new_rel_path, &node, &template.body)
     }
 
+    /// Create an anchored comment on `target_rel_path`, pinned to
+    /// `text_fragment` inside its body — the text-fragment-fallback anchor
+    /// strategy (ARCHITECTURE.md §4/§6; the CRDT-position strategy is Phase 6).
+    /// `comment_rel_path` is where the new `annotation` node is written;
+    /// `body` is the comment's own text.
+    pub fn add_comment(
+        &mut self,
+        target_rel_path: impl AsRef<Path>,
+        text_fragment: &str,
+        comment_rel_path: impl AsRef<Path>,
+        body: &str,
+    ) -> IrisResult<()> {
+        let target = self.vault.read_node(&target_rel_path)?;
+        let annotation = new_annotation(target.node.id, Some(text_fragment.to_string()));
+        self.create_node(comment_rel_path, &annotation, body)
+    }
+
+    /// Reply to an existing annotation — a threaded comment, `annotates` the
+    /// parent annotation rather than the original target (ARCHITECTURE.md §4).
+    /// Replies carry no text anchor: they're pinned to the parent comment,
+    /// not to a text range, so anchor resolution doesn't apply to them.
+    pub fn reply_to_annotation(
+        &mut self,
+        parent_rel_path: impl AsRef<Path>,
+        reply_rel_path: impl AsRef<Path>,
+        body: &str,
+    ) -> IrisResult<()> {
+        let parent = self.vault.read_node(&parent_rel_path)?;
+        let reply = new_annotation(parent.node.id, None);
+        self.create_node(reply_rel_path, &reply, body)
+    }
+
+    /// Mark an annotation resolved (handled) or reopen it.
+    pub fn set_annotation_resolved(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        resolved: bool,
+    ) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.resolved = resolved;
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!(
+                "{} annotation {}",
+                if resolved { "Resolve" } else { "Reopen" },
+                rel_path.display()
+            ),
+        )
+    }
+
     /// Replace a node's frontmatter, preserving its body byte-for-byte.
     ///
     /// Note: this re-serializes the *frontmatter* from `node` — comments, key
@@ -439,6 +500,61 @@ impl Engine {
             }
             UndoState::Absent => self.remove_node_file(rel_path, commit_msg),
         }
+    }
+}
+
+/// A fresh `annotation` node targeting `target_id`, with an optional
+/// text-fragment anchor (`None` for a threaded reply — see
+/// `Engine::reply_to_annotation`).
+fn new_annotation(target_id: crate::types::NodeId, text_fragment: Option<String>) -> Node {
+    let now = Utc::now();
+    Node {
+        id: crate::types::new_node_id(),
+        node_type: crate::types::NodeType::Annotation,
+        created: now,
+        modified: now,
+        schema_version: crate::types::CURRENT_SCHEMA_VERSION,
+        lifecycle: None,
+        archived_at: None,
+        domain: None,
+        tags: vec![],
+        relations: vec![crate::types::Relation {
+            rel_type: "annotates".to_string(),
+            target: target_id,
+        }],
+        deleted_at: None,
+        is_template: false,
+        distillation_level: None,
+        status: None,
+        priority: None,
+        scheduled_date: None,
+        due_date: None,
+        estimated_pomodoros: None,
+        actual_pomodoros: None,
+        recurrence: None,
+        checklist: vec![],
+        start: None,
+        end: None,
+        external_id: None,
+        project_status: None,
+        start_date: None,
+        target_date: None,
+        source_url: None,
+        read_status: None,
+        reminder_text: None,
+        fire_at: None,
+        reminder_status: None,
+        resolved: false,
+        anchor: text_fragment.map(|text_fragment| crate::types::AnnotationAnchor {
+            text_fragment: Some(text_fragment),
+            crdt_position: None,
+        }),
+        pinned: vec![],
+        active_filter: None,
+        default_view: None,
+        theme: None,
+        ink_attachment: None,
+        date: None,
     }
 }
 
@@ -715,6 +831,106 @@ mod tests {
         assert!(engine
             .instantiate_template("notes/a.md", "notes/b.md")
             .is_err());
+    }
+
+    #[test]
+    fn add_comment_creates_annotation_anchored_to_target() {
+        let dir = TempDir::new("comment");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node(
+                "notes/a.md",
+                &sample_node(),
+                "\n\nSome important text here.\n",
+            )
+            .unwrap();
+        let target_id = engine.read_node("notes/a.md").unwrap().node.id;
+
+        engine
+            .add_comment(
+                "notes/a.md",
+                "important text",
+                "notes/a-comment.md",
+                "\n\nWhy is this important?\n",
+            )
+            .unwrap();
+
+        let comment = engine.read_node("notes/a-comment.md").unwrap();
+        assert_eq!(comment.node.node_type, crate::types::NodeType::Annotation);
+        assert!(!comment.node.resolved);
+        assert_eq!(
+            comment.node.anchor.unwrap().text_fragment.as_deref(),
+            Some("important text")
+        );
+        assert_eq!(comment.node.relations.len(), 1);
+        assert_eq!(comment.node.relations[0].rel_type, "annotates");
+        assert_eq!(comment.node.relations[0].target, target_id);
+        assert!(engine.check_integrity().unwrap().is_clean());
+    }
+
+    #[test]
+    fn reply_to_annotation_targets_the_parent_annotation() {
+        let dir = TempDir::new("reply");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\nSome text.\n")
+            .unwrap();
+        engine
+            .add_comment("notes/a.md", "Some text", "notes/comment.md", "\n\nQ?\n")
+            .unwrap();
+        let comment_id = engine.read_node("notes/comment.md").unwrap().node.id;
+
+        engine
+            .reply_to_annotation("notes/comment.md", "notes/reply.md", "\n\nA.\n")
+            .unwrap();
+
+        let reply = engine.read_node("notes/reply.md").unwrap();
+        assert!(reply.node.anchor.is_none());
+        assert_eq!(reply.node.relations[0].rel_type, "annotates");
+        assert_eq!(reply.node.relations[0].target, comment_id);
+        assert!(engine.check_integrity().unwrap().is_clean());
+    }
+
+    #[test]
+    fn set_annotation_resolved_toggles_and_is_undoable() {
+        let dir = TempDir::new("resolve");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\nSome text.\n")
+            .unwrap();
+        engine
+            .add_comment("notes/a.md", "Some text", "notes/comment.md", "\n")
+            .unwrap();
+
+        engine
+            .set_annotation_resolved("notes/comment.md", true)
+            .unwrap();
+        assert!(engine.read_node("notes/comment.md").unwrap().node.resolved);
+
+        engine.undo().unwrap();
+        assert!(!engine.read_node("notes/comment.md").unwrap().node.resolved);
+    }
+
+    #[test]
+    fn deleting_annotation_target_leaves_annotation_orphaned() {
+        let dir = TempDir::new("orphan-on-target-delete");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\nSome text.\n")
+            .unwrap();
+        engine
+            .add_comment("notes/a.md", "Some text", "notes/comment.md", "\n")
+            .unwrap();
+
+        // Rewrite the target's body so the anchored fragment no longer exists.
+        let target = engine.read_node("notes/a.md").unwrap().node;
+        let contents = render(&target, "\n\nCompletely different text.\n").unwrap();
+        engine.vault.write_node("notes/a.md", &contents).unwrap();
+        engine.rebuild_cache().unwrap();
+
+        let report = engine.check_integrity().unwrap();
+        assert!(!report.is_clean());
+        assert_eq!(report.orphaned_annotations.len(), 1);
     }
 
     #[test]
