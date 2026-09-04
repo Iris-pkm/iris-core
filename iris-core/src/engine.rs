@@ -11,7 +11,7 @@
 //! is never discarded for a secondary system's failure. Each step here simply
 //! returns its own error without undoing the ones before it.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 
@@ -23,10 +23,37 @@ use crate::parser::ParsedNode;
 use crate::types::Node;
 use crate::vault::Vault;
 
+/// A captured node state, for undo/redo: either the node existed (with this
+/// frontmatter and body) or the path was absent (nothing to restore but the
+/// removal itself).
+enum UndoState {
+    Existing { node: Box<Node>, body: String },
+    Absent,
+}
+
+/// One reversible step: "at `rel_path`, the state used to be `state`."
+/// Applying it writes that state back (or removes the file, if it was absent).
+struct UndoEntry {
+    rel_path: PathBuf,
+    state: UndoState,
+}
+
+/// Default Trash retention window before `purge_expired_trash_default` removes
+/// a soft-deleted node from the working vault (ARCHITECTURE.md §5). Still
+/// recoverable from git history afterward — this only affects the convenience
+/// Trash view, not durability.
+pub const DEFAULT_TRASH_RETENTION_DAYS: i64 = 30;
+
 pub struct Engine {
     vault: Vault,
     cache: Cache,
     git: GitRepo,
+    /// In-session undo/redo (ARCHITECTURE.md §5): in-memory, cleared on
+    /// restart (there's no `Engine` state to reopen — a fresh `Engine::open`
+    /// starts with empty stacks). Distinct from, and much shorter-lived than,
+    /// git-history restore or Trash.
+    undo_stack: Vec<UndoEntry>,
+    redo_stack: Vec<UndoEntry>,
 }
 
 impl Engine {
@@ -40,7 +67,13 @@ impl Engine {
         std::fs::create_dir_all(vault.root().join(".iris"))?;
         let cache = Cache::open(vault.root().join(".iris/cache.sqlite"))?;
 
-        let mut engine = Engine { vault, cache, git };
+        let mut engine = Engine {
+            vault,
+            cache,
+            git,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        };
         engine.rebuild_cache()?;
         Ok(engine)
     }
@@ -50,7 +83,13 @@ impl Engine {
         let vault = Vault::open(path.as_ref())?;
         let git = GitRepo::open(vault.root())?;
         let cache = Cache::open(vault.root().join(".iris/cache.sqlite"))?;
-        Ok(Engine { vault, cache, git })
+        Ok(Engine {
+            vault,
+            cache,
+            git,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        })
     }
 
     /// Create a new node file and commit it.
@@ -63,12 +102,15 @@ impl Engine {
         node: &Node,
         body: &str,
     ) -> IrisResult<()> {
-        validate(node)?;
-        let contents = render(node, body)?;
-        self.vault.write_node(&rel_path, &contents)?;
-        self.rebuild_cache()?;
-        self.git
-            .commit_all(&format!("Create {}", rel_path.as_ref().display()))?;
+        let rel_path = rel_path.as_ref();
+        let before = self.capture_state(rel_path);
+        self.write_node_raw(
+            rel_path,
+            node,
+            body,
+            &format!("Create {}", rel_path.display()),
+        )?;
+        self.push_undo(rel_path, before);
         Ok(())
     }
 
@@ -110,22 +152,145 @@ impl Engine {
     /// Full field-level lossless editing (ADR-019) needs a concrete-syntax-tree
     /// editor in `parser.rs` that doesn't exist yet; this is a known, honest gap.
     pub fn update_node(&mut self, rel_path: impl AsRef<Path>, node: &Node) -> IrisResult<()> {
-        validate(node)?;
-        let existing = self.vault.read_node(&rel_path)?;
-        let contents = render(node, &existing.body)?;
-        self.vault.write_node(&rel_path, &contents)?;
-        self.rebuild_cache()?;
-        self.git
-            .commit_all(&format!("Update {}", rel_path.as_ref().display()))?;
-        Ok(())
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node),
+                body: existing.body.clone(),
+            },
+        );
+        self.write_node_raw(
+            rel_path,
+            node,
+            &existing.body,
+            &format!("Update {}", rel_path.display()),
+        )
     }
 
-    /// Soft-delete a node: sets `deleted_at` (ADR-016). The file is not removed.
+    /// Soft-delete a node: sets `deleted_at` (ADR-016). The file is not removed
+    /// — it moves to the Trash view (`views::trash`) and stays recoverable via
+    /// `restore_node` or `undo`, and later `purge_expired_trash` if unrestored.
     pub fn delete_node(&mut self, rel_path: impl AsRef<Path>) -> IrisResult<()> {
-        let existing = self.vault.read_node(&rel_path)?;
-        let mut node = existing.node.clone();
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
         node.deleted_at = Some(Utc::now());
-        self.update_node(rel_path, &node)
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Trash {}", rel_path.display()),
+        )
+    }
+
+    /// Recover a node out of Trash: clears `deleted_at`.
+    pub fn restore_node(&mut self, rel_path: impl AsRef<Path>) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.deleted_at = None;
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Restore {}", rel_path.display()),
+        )
+    }
+
+    /// Permanently remove every Trash node whose `deleted_at` is older than
+    /// `retention` (ARCHITECTURE.md §5: "after the window they're removed from
+    /// the working vault... because every prior state was committed to git,
+    /// they remain recoverable from history indefinitely"). Returns the count
+    /// removed. Deliberately does **not** go through the undo stack — this is
+    /// the git-history tier of recovery, not the in-session tier.
+    pub fn purge_expired_trash(&mut self, retention: chrono::Duration) -> IrisResult<usize> {
+        let cutoff = Utc::now() - retention;
+        let trashed = self
+            .cache
+            .query_nodes("SELECT * FROM nodes WHERE deleted_at IS NOT NULL", [])?;
+
+        let mut removed = 0;
+        for row in trashed {
+            let Some(deleted_at) = row.deleted_at.as_deref() else {
+                continue;
+            };
+            let Ok(deleted_at) = chrono::DateTime::parse_from_rfc3339(deleted_at) else {
+                continue;
+            };
+            if deleted_at.with_timezone(&Utc) < cutoff {
+                self.vault.remove_node(&row.path)?;
+                removed += 1;
+            }
+        }
+
+        if removed > 0 {
+            self.rebuild_cache()?;
+            self.git
+                .commit_all(&format!("Purge {removed} expired Trash item(s)"))?;
+        }
+        Ok(removed)
+    }
+
+    /// `purge_expired_trash` using the default ~30-day retention window
+    /// (`DEFAULT_TRASH_RETENTION_DAYS`).
+    pub fn purge_expired_trash_default(&mut self) -> IrisResult<usize> {
+        self.purge_expired_trash(chrono::Duration::days(DEFAULT_TRASH_RETENTION_DAYS))
+    }
+
+    /// Reverse the most recent undoable operation (create/update/delete/restore).
+    /// Returns `false` if there was nothing to undo. In-session only — cleared
+    /// on restart, distinct from Trash and git-history restore
+    /// (ARCHITECTURE.md §5).
+    pub fn undo(&mut self) -> IrisResult<bool> {
+        let Some(entry) = self.undo_stack.pop() else {
+            return Ok(false);
+        };
+        let redo_state = self.capture_state(&entry.rel_path);
+        self.apply_state(&entry.rel_path, &entry.state, "Undo")?;
+        self.redo_stack.push(UndoEntry {
+            rel_path: entry.rel_path,
+            state: redo_state,
+        });
+        Ok(true)
+    }
+
+    /// Reapply the most recently undone operation. Returns `false` if there
+    /// was nothing to redo.
+    pub fn redo(&mut self) -> IrisResult<bool> {
+        let Some(entry) = self.redo_stack.pop() else {
+            return Ok(false);
+        };
+        let undo_state = self.capture_state(&entry.rel_path);
+        self.apply_state(&entry.rel_path, &entry.state, "Redo")?;
+        self.undo_stack.push(UndoEntry {
+            rel_path: entry.rel_path,
+            state: undo_state,
+        });
+        Ok(true)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
     }
 
     /// Rebuild the cache from the vault (safe to call any time — ADR-002).
@@ -140,6 +305,68 @@ impl Engine {
 
     pub fn vault_root(&self) -> &Path {
         self.vault.root()
+    }
+
+    /// Write a node's canonical file, rebuild the cache, and commit — the
+    /// shared core of every mutating operation (ADR-021's ordering), without
+    /// touching the undo/redo stacks (callers push their own entries, since
+    /// the "before" state they need depends on which operation this is).
+    fn write_node_raw(
+        &mut self,
+        rel_path: &Path,
+        node: &Node,
+        body: &str,
+        commit_msg: &str,
+    ) -> IrisResult<()> {
+        validate(node)?;
+        let contents = render(node, body)?;
+        self.vault.write_node(rel_path, &contents)?;
+        self.rebuild_cache()?;
+        self.git.commit_all(commit_msg)?;
+        Ok(())
+    }
+
+    /// Permanently remove a node's file, rebuild the cache, and commit.
+    fn remove_node_file(&mut self, rel_path: &Path, commit_msg: &str) -> IrisResult<()> {
+        self.vault.remove_node(rel_path)?;
+        self.rebuild_cache()?;
+        self.git.commit_all(commit_msg)?;
+        Ok(())
+    }
+
+    /// Snapshot the current state at `rel_path`, for the undo/redo stacks.
+    fn capture_state(&self, rel_path: &Path) -> UndoState {
+        match self.vault.read_node(rel_path) {
+            Ok(parsed) => UndoState::Existing {
+                node: Box::new(parsed.node),
+                body: parsed.body,
+            },
+            Err(_) => UndoState::Absent,
+        }
+    }
+
+    fn push_undo(&mut self, rel_path: &Path, before: UndoState) {
+        self.undo_stack.push(UndoEntry {
+            rel_path: rel_path.to_path_buf(),
+            state: before,
+        });
+        self.redo_stack.clear();
+    }
+
+    /// Write `state` back at `rel_path`: recreate/overwrite it if it was
+    /// `Existing`, or remove the file if it was `Absent`.
+    fn apply_state(
+        &mut self,
+        rel_path: &Path,
+        state: &UndoState,
+        commit_msg: &str,
+    ) -> IrisResult<()> {
+        match state {
+            UndoState::Existing { node, body } => {
+                self.write_node_raw(rel_path, node, body, commit_msg)
+            }
+            UndoState::Absent => self.remove_node_file(rel_path, commit_msg),
+        }
     }
 }
 
@@ -346,5 +573,139 @@ mod tests {
         assert!(engine
             .instantiate_template("notes/a.md", "notes/b.md")
             .is_err());
+    }
+
+    #[test]
+    fn restore_node_clears_deleted_at() {
+        let dir = TempDir::new("restore");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n")
+            .unwrap();
+        engine.delete_node("notes/a.md").unwrap();
+        assert!(engine
+            .read_node("notes/a.md")
+            .unwrap()
+            .node
+            .deleted_at
+            .is_some());
+
+        engine.restore_node("notes/a.md").unwrap();
+        assert!(engine
+            .read_node("notes/a.md")
+            .unwrap()
+            .node
+            .deleted_at
+            .is_none());
+    }
+
+    #[test]
+    fn purge_expired_trash_removes_only_nodes_past_retention() {
+        let dir = TempDir::new("purge");
+        let mut engine = Engine::init(dir.path()).unwrap();
+
+        // Deleted "now" — inside any reasonable retention window.
+        engine
+            .create_node("notes/fresh.md", &sample_node(), "\n")
+            .unwrap();
+        engine.delete_node("notes/fresh.md").unwrap();
+
+        // Deleted far in the past — outside a 30-day window.
+        engine
+            .create_node("notes/stale.md", &sample_node(), "\n")
+            .unwrap();
+        engine.delete_node("notes/stale.md").unwrap();
+        let mut backdated = engine.read_node("notes/stale.md").unwrap().node;
+        backdated.deleted_at = Some(Utc::now() - chrono::Duration::days(45));
+        // Bypass the undo-tracked update_node here — this is only test setup
+        // to simulate an old deletion, not a real engine operation.
+        let contents = render(&backdated, "\n").unwrap();
+        engine
+            .vault
+            .write_node("notes/stale.md", &contents)
+            .unwrap();
+        engine.rebuild_cache().unwrap();
+
+        let removed = engine.purge_expired_trash_default().unwrap();
+        assert_eq!(removed, 1);
+        assert!(engine.read_node("notes/fresh.md").is_ok());
+        assert!(engine.read_node("notes/stale.md").is_err());
+    }
+
+    #[test]
+    fn undo_reverses_create_update_and_delete() {
+        let dir = TempDir::new("undo");
+        let mut engine = Engine::init(dir.path()).unwrap();
+
+        // Undo a create: the file should be gone afterward.
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\nHello.\n")
+            .unwrap();
+        assert!(engine.undo().unwrap());
+        assert!(engine.read_node("notes/a.md").is_err());
+
+        // Redo brings it back exactly as it was.
+        assert!(engine.redo().unwrap());
+        let after_redo = engine.read_node("notes/a.md").unwrap();
+        assert!(after_redo.body.contains("Hello."));
+
+        // Undo an update: domain reverts.
+        let mut updated = after_redo.node.clone();
+        updated.domain = Some("changed".to_string());
+        engine.update_node("notes/a.md", &updated).unwrap();
+        assert_eq!(
+            engine
+                .read_node("notes/a.md")
+                .unwrap()
+                .node
+                .domain
+                .as_deref(),
+            Some("changed")
+        );
+        assert!(engine.undo().unwrap());
+        assert_eq!(engine.read_node("notes/a.md").unwrap().node.domain, None);
+
+        // Undo a delete: deleted_at clears.
+        engine.delete_node("notes/a.md").unwrap();
+        assert!(engine
+            .read_node("notes/a.md")
+            .unwrap()
+            .node
+            .deleted_at
+            .is_some());
+        assert!(engine.undo().unwrap());
+        assert!(engine
+            .read_node("notes/a.md")
+            .unwrap()
+            .node
+            .deleted_at
+            .is_none());
+    }
+
+    #[test]
+    fn undo_with_empty_stack_is_a_harmless_no_op() {
+        let dir = TempDir::new("undo-empty");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        assert!(!engine.can_undo());
+        assert!(!engine.undo().unwrap());
+        assert!(!engine.can_redo());
+        assert!(!engine.redo().unwrap());
+    }
+
+    #[test]
+    fn new_mutation_clears_the_redo_stack() {
+        let dir = TempDir::new("redo-clear");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n")
+            .unwrap();
+        engine.undo().unwrap();
+        assert!(engine.can_redo());
+
+        // A fresh mutation invalidates the redo branch (standard editor behavior).
+        engine
+            .create_node("notes/b.md", &sample_node(), "\n")
+            .unwrap();
+        assert!(!engine.can_redo());
     }
 }

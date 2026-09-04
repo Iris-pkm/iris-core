@@ -73,6 +73,15 @@ impl Vault {
         Ok(())
     }
 
+    /// Permanently remove a node file (absolute, or relative to the vault root).
+    /// Hard deletion — no soft-delete/Trash semantics here, that's the engine's
+    /// job (ADR-016). The file's history remains recoverable from git.
+    pub fn remove_node(&self, path: impl AsRef<Path>) -> IrisResult<()> {
+        let full_path = self.resolve(path.as_ref());
+        fs::remove_file(&full_path)?;
+        Ok(())
+    }
+
     fn resolve(&self, path: &Path) -> PathBuf {
         if path.is_absolute() {
             path.to_path_buf()
@@ -199,6 +208,25 @@ Hello vault.
             found,
             vec![PathBuf::from("notes/a.md"), PathBuf::from("tasks/b.md")]
         );
+    }
+
+    #[test]
+    fn remove_node_deletes_the_file() {
+        let dir = TempDir::new("remove");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+
+        vault.remove_node("notes/a.md").unwrap();
+
+        assert!(!dir.path().join("notes/a.md").exists());
+        assert!(vault.read_node("notes/a.md").is_err());
+    }
+
+    #[test]
+    fn remove_node_missing_file_errors() {
+        let dir = TempDir::new("remove-missing");
+        let vault = Vault::create(dir.path()).unwrap();
+        assert!(vault.remove_node("notes/missing.md").is_err());
     }
 
     #[test]

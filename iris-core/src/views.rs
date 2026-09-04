@@ -67,6 +67,16 @@ pub fn logbook(cache: &Cache) -> IrisResult<Vec<CachedNode>> {
     )
 }
 
+/// Trash: every soft-deleted node, any type (ARCHITECTURE.md §5 Data Integrity
+/// & Recovery), most-recently-deleted first. Unlike the task views above this
+/// isn't scoped to `node_type = 'task'` — Trash holds anything the user deleted.
+pub fn trash(cache: &Cache) -> IrisResult<Vec<CachedNode>> {
+    cache.query_nodes(
+        "SELECT * FROM nodes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+        [],
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -273,5 +283,42 @@ Body.
         let cache = setup(dir.path());
         let ids: Vec<_> = logbook(&cache).unwrap().into_iter().map(|n| n.id).collect();
         assert_eq!(ids, vec!["01JQZ8DONE00000000000000F".to_string()]);
+    }
+
+    #[test]
+    fn trash_holds_any_deleted_node_type_ordered_most_recent_first() {
+        let dir = TempDir::new("trash");
+        let vault = Vault::create(dir.path()).unwrap();
+
+        vault
+            .write_node(
+                "notes/kept.md",
+                "---\nid: 01JQZ8KEPT0000000000000A\ntype: note\ncreated: 2026-01-15T09:30:00Z\nmodified: 2026-01-15T09:30:00Z\nschema_version: 1\n---\n\nStill here.\n",
+            )
+            .unwrap();
+        vault
+            .write_node(
+                "notes/trashed-earlier.md",
+                "---\nid: 01JQZ8TRASH1000000000000B\ntype: note\ncreated: 2026-01-15T09:30:00Z\nmodified: 2026-01-15T09:30:00Z\nschema_version: 1\ndeleted_at: 2026-01-15T10:00:00Z\n---\n\nGone (earlier).\n",
+            )
+            .unwrap();
+        vault
+            .write_node(
+                "tasks/trashed-later.md",
+                "---\nid: 01JQZ8TRASH2000000000000C\ntype: task\ncreated: 2026-01-15T09:30:00Z\nmodified: 2026-01-15T09:30:00Z\nschema_version: 1\ndeleted_at: 2026-01-15T12:00:00Z\n---\n\nGone (later).\n",
+            )
+            .unwrap();
+
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+
+        let ids: Vec<_> = trash(&cache).unwrap().into_iter().map(|n| n.id).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "01JQZ8TRASH2000000000000C".to_string(),
+                "01JQZ8TRASH1000000000000B".to_string(),
+            ]
+        );
     }
 }
