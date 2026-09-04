@@ -78,6 +78,37 @@ impl Engine {
         Ok(engine)
     }
 
+    /// Restore-from-backup, the first-run path alongside "create new" and
+    /// "open existing" (ARCHITECTURE.md §5 Data Integrity & Recovery): clone
+    /// `remote_url` into `dest_path`, rebuild the SQLite cache from the
+    /// restored files, and run the integrity checker — all *before* the
+    /// restore is considered complete, since that's when verification
+    /// actually matters (there's deliberately no periodic background
+    /// verification). Returns the opened `Engine` plus the integrity report;
+    /// a non-clean report is not itself an error — malformed files are
+    /// quarantined, never fatal — the caller decides what to show the user.
+    pub fn restore_from_backup(
+        remote_url: &str,
+        dest_path: impl AsRef<Path>,
+    ) -> IrisResult<(Self, IntegrityReport)> {
+        let dest_path = dest_path.as_ref();
+        let git = GitRepo::clone(remote_url, dest_path)?;
+        let vault = Vault::open(dest_path)?;
+        std::fs::create_dir_all(dest_path.join(".iris"))?;
+        let cache = Cache::open(dest_path.join(".iris/cache.sqlite"))?;
+
+        let mut engine = Engine {
+            vault,
+            cache,
+            git,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        };
+        engine.rebuild_cache()?;
+        let report = engine.check_integrity()?;
+        Ok((engine, report))
+    }
+
     /// Open an existing vault (directory, git repo, and `.iris/cache.sqlite` must exist).
     pub fn open(path: impl AsRef<Path>) -> IrisResult<Self> {
         let vault = Vault::open(path.as_ref())?;
@@ -510,6 +541,27 @@ mod tests {
         // git history: create + update + delete = 3 commits
         assert_eq!(engine.git.history().unwrap().len(), 3);
         assert!(engine.git.status().unwrap().is_empty());
+    }
+
+    #[test]
+    fn restore_from_backup_clones_rebuilds_cache_and_reports_clean() {
+        let source_dir = TempDir::new("restore-source");
+        {
+            let mut source = Engine::init(source_dir.path()).unwrap();
+            source
+                .create_node("notes/a.md", &sample_node(), "\n\nBackup me.\n")
+                .unwrap();
+        }
+
+        let dest_dir = TempDir::new("restore-dest");
+        let (restored, report) =
+            Engine::restore_from_backup(&source_dir.path().to_string_lossy(), dest_dir.path())
+                .unwrap();
+
+        assert!(report.is_clean());
+        let node = restored.read_node("notes/a.md").unwrap();
+        assert!(node.body.contains("Backup me."));
+        assert_eq!(restored.cache.list_nodes().unwrap().len(), 1);
     }
 
     #[test]

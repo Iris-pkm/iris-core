@@ -28,6 +28,17 @@ impl GitRepo {
         Ok(GitRepo { repo })
     }
 
+    /// Clone a remote repository into `path` (creating it). The transport is
+    /// whatever `url` names — a user-controlled git remote (self-hosted Gitea,
+    /// private GitHub/GitLab, a local/NAS path over SSH) per ADR-030; there is
+    /// no Iris-run relay. This is the git half of "restore from backup"
+    /// (ARCHITECTURE.md §5) — the engine layer adds the cache rebuild and
+    /// integrity check that make a restore trustworthy.
+    pub fn clone(url: &str, path: impl AsRef<Path>) -> IrisResult<Self> {
+        let repo = Repository::clone(url, path).map_err(git_err)?;
+        Ok(GitRepo { repo })
+    }
+
     /// Stage every change in the working tree and commit it.
     ///
     /// Returns the new commit's id. If there's a previous commit, it becomes
@@ -135,6 +146,21 @@ mod tests {
         let dir = TempDir::new("open");
         GitRepo::init(dir.path()).unwrap();
         GitRepo::open(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn clone_checks_out_committed_files() {
+        let source_dir = TempDir::new("clone-source");
+        let source = GitRepo::init(source_dir.path()).unwrap();
+        fs::write(source_dir.path().join("note.md"), "hello").unwrap();
+        source.commit_all("first commit").unwrap();
+
+        let dest_dir = TempDir::new("clone-dest");
+        fs::remove_dir_all(dest_dir.path()).unwrap(); // clone must create the dir itself
+        let cloned = GitRepo::clone(&source_dir.path().to_string_lossy(), dest_dir.path()).unwrap();
+
+        assert!(dest_dir.path().join("note.md").exists());
+        assert_eq!(cloned.history().unwrap().len(), 1);
     }
 
     #[test]
