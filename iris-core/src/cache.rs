@@ -25,6 +25,14 @@ pub struct CachedNode {
     pub due_date: Option<String>,
     pub deleted_at: Option<String>,
     pub has_project: bool,
+    /// The target id of this node's `parent_project` relation, if any — the
+    /// project a note/task belongs to (SCHEMA_SPEC §5). Powers per-project
+    /// queries like the distillation queue (`distillation.rs`); `has_project`
+    /// stays as a cheap boolean for callers that only need presence.
+    pub parent_project: Option<String>,
+    /// `raw` / `bolded` / `highlighted` / `summarized`, or `None` if unset
+    /// (treated as not-yet-distilled — SCHEMA_SPEC's `distillation_level`).
+    pub distillation_level: Option<String>,
     pub domain: Option<String>,
     /// Comma-joined tags (SQLite has no array type). See `search.rs` for how
     /// tag filtering matches against this.
@@ -68,6 +76,8 @@ impl Cache {
                     due_date       TEXT,
                     deleted_at     TEXT,
                     has_project    INTEGER NOT NULL DEFAULT 0,
+                    parent_project TEXT,
+                    distillation_level TEXT,
                     domain         TEXT,
                     tags           TEXT NOT NULL DEFAULT '',
                     body           TEXT NOT NULL DEFAULT '',
@@ -104,18 +114,25 @@ impl Cache {
                 .into_owned();
             let node_type = node_type_str(&parsed.node.node_type);
             let priority = parsed.node.priority.as_ref().map(priority_str);
-            let has_project = parsed
+            let parent_project = parsed
                 .node
                 .relations
                 .iter()
-                .any(|r| r.rel_type == "parent_project");
+                .find(|r| r.rel_type == "parent_project")
+                .map(|r| r.target.clone());
+            let distillation_level = parsed
+                .node
+                .distillation_level
+                .as_ref()
+                .map(distillation_level_str);
             let tags = parsed.node.tags.join(",");
 
             tx.execute(
                 "INSERT INTO nodes
                     (id, node_type, path, status, priority, scheduled_date, due_date,
-                     deleted_at, has_project, domain, tags, body, is_template)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                     deleted_at, has_project, parent_project, distillation_level,
+                     domain, tags, body, is_template)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 rusqlite::params![
                     &parsed.node.id,
                     &node_type,
@@ -125,7 +142,9 @@ impl Cache {
                     parsed.node.scheduled_date.map(|d| d.to_string()),
                     parsed.node.due_date.map(|d| d.to_string()),
                     parsed.node.deleted_at.map(|d| d.to_rfc3339()),
-                    has_project as i64,
+                    parent_project.is_some() as i64,
+                    &parent_project,
+                    &distillation_level,
                     &parsed.node.domain,
                     &tags,
                     &parsed.body,
@@ -171,6 +190,8 @@ impl Cache {
                     due_date: row.get("due_date")?,
                     deleted_at: row.get("deleted_at")?,
                     has_project: row.get::<_, i64>("has_project")? != 0,
+                    parent_project: row.get("parent_project")?,
+                    distillation_level: row.get("distillation_level")?,
                     domain: row.get("domain")?,
                     tags: row.get("tags")?,
                     body: row.get("body")?,
@@ -191,6 +212,13 @@ fn node_type_str(node_type: &crate::types::NodeType) -> String {
 
 fn priority_str(priority: &crate::types::Priority) -> String {
     serde_yaml::to_string(priority)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn distillation_level_str(level: &crate::types::DistillationLevel) -> String {
+    serde_yaml::to_string(level)
         .unwrap_or_default()
         .trim()
         .to_string()

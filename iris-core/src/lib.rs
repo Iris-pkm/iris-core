@@ -8,6 +8,7 @@
 //! - **Git integration** — vault-as-repository (to come)
 
 pub mod cache;
+pub mod distillation;
 pub mod engine;
 pub mod error;
 pub mod export;

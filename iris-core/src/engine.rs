@@ -237,6 +237,95 @@ impl Engine {
         )
     }
 
+    /// Set a node's `distillation_level` (progressive summarization,
+    /// ARCHITECTURE.md §11: `raw → bolded → highlighted → summarized`). No
+    /// ordering is enforced — a note can be re-bolded after being highlighted,
+    /// or jump straight to `summarized`; distillation is user-directed
+    /// multi-visit processing, not a state machine like project status.
+    pub fn set_distillation_level(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        level: crate::types::DistillationLevel,
+    ) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.distillation_level = Some(level);
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Distill {}", rel_path.display()),
+        )
+    }
+
+    /// Move a project to a new `project_status`, enforcing the explicit state
+    /// machine from ADR-018/`DECISION_LOG.md`: `someday → planned → active →
+    /// paused → active`, `active → completed`, `planned → cancelled`,
+    /// `paused → cancelled`. An unset status may move to any state (an
+    /// initial assignment, not a real transition — flagged simplification:
+    /// the ADR's chain doesn't address a project created with no status yet).
+    /// Rejects any other transition.
+    ///
+    /// Returns `true` if this transition is an **activation** — moving into
+    /// `active` from a non-active state (ADR-018 rule 1). The distillation
+    /// queue itself needs no separate "fire" step: it's a live query
+    /// (`distillation::queue`) over `parent_project` + `distillation_level`,
+    /// so notes already linked (or linked later, rule 3) show up without any
+    /// snapshot to take here — this return value is purely a signal for a UI
+    /// to know when to open the guided-activation view (ADR-023).
+    pub fn set_project_status(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        new_status: crate::types::ProjectStatus,
+    ) -> IrisResult<bool> {
+        use crate::types::ProjectStatus::*;
+
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        let current = existing.node.project_status.clone();
+
+        let legal = match &current {
+            None => true,
+            Some(Someday) => matches!(new_status, Planned),
+            Some(Planned) => matches!(new_status, Active | Cancelled),
+            Some(Active) => matches!(new_status, Paused | Completed),
+            Some(Paused) => matches!(new_status, Active | Cancelled),
+            Some(Completed) | Some(Cancelled) => false,
+        };
+        if !legal {
+            return Err(IrisError::Validation(format!(
+                "illegal project status transition: {current:?} -> {new_status:?}"
+            )));
+        }
+
+        let activates = !matches!(current, Some(Active)) && matches!(new_status, Active);
+
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.project_status = Some(new_status);
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Set project status {}", rel_path.display()),
+        )?;
+        Ok(activates)
+    }
+
     /// Replace a node's frontmatter, preserving its body byte-for-byte.
     ///
     /// Note: this re-serializes the *frontmatter* from `node` — comments, key
@@ -931,6 +1020,138 @@ mod tests {
         let report = engine.check_integrity().unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.orphaned_annotations.len(), 1);
+    }
+
+    #[test]
+    fn set_distillation_level_is_undoable() {
+        let dir = TempDir::new("distill");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n")
+            .unwrap();
+        assert_eq!(
+            engine
+                .read_node("notes/a.md")
+                .unwrap()
+                .node
+                .distillation_level,
+            None
+        );
+
+        engine
+            .set_distillation_level("notes/a.md", crate::types::DistillationLevel::Bolded)
+            .unwrap();
+        assert_eq!(
+            engine
+                .read_node("notes/a.md")
+                .unwrap()
+                .node
+                .distillation_level,
+            Some(crate::types::DistillationLevel::Bolded)
+        );
+
+        engine.undo().unwrap();
+        assert_eq!(
+            engine
+                .read_node("notes/a.md")
+                .unwrap()
+                .node
+                .distillation_level,
+            None
+        );
+    }
+
+    #[test]
+    fn project_status_follows_the_legal_state_machine() {
+        let dir = TempDir::new("project-status");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut project = sample_node();
+        project.node_type = crate::types::NodeType::Project;
+        engine.create_node("projects/p.md", &project, "\n").unwrap();
+
+        // Unset -> Planned: legal (initial assignment), doesn't activate.
+        let activated = engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Planned)
+            .unwrap();
+        assert!(!activated);
+
+        // Planned -> Active: legal, and this IS activation.
+        let activated = engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Active)
+            .unwrap();
+        assert!(activated);
+        assert_eq!(
+            engine
+                .read_node("projects/p.md")
+                .unwrap()
+                .node
+                .project_status,
+            Some(crate::types::ProjectStatus::Active)
+        );
+
+        // Active -> Paused -> Active: legal, and Paused -> Active activates
+        // again too — Paused is a non-active state, and rule 1 fires on any
+        // transition into active from a non-active state, full stop. Rule 2
+        // ("doesn't re-fire on merely viewing") is about not calling this
+        // function at all for a no-op view, not about which edges count.
+        engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Paused)
+            .unwrap();
+        let activated = engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Active)
+            .unwrap();
+        assert!(activated);
+
+        // Active -> Planned: illegal, not in the state machine.
+        assert!(engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Planned)
+            .is_err());
+    }
+
+    #[test]
+    fn project_status_rejects_transitions_out_of_terminal_states() {
+        let dir = TempDir::new("project-status-terminal");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut project = sample_node();
+        project.node_type = crate::types::NodeType::Project;
+        engine.create_node("projects/p.md", &project, "\n").unwrap();
+
+        engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Planned)
+            .unwrap();
+        engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Cancelled)
+            .unwrap();
+
+        assert!(engine
+            .set_project_status("projects/p.md", crate::types::ProjectStatus::Active)
+            .is_err());
+    }
+
+    #[test]
+    fn distillation_queue_reflects_project_membership_and_level() {
+        let dir = TempDir::new("distill-queue");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut project = sample_node();
+        project.node_type = crate::types::NodeType::Project;
+        engine.create_node("projects/p.md", &project, "\n").unwrap();
+        let project_id = engine.read_node("projects/p.md").unwrap().node.id;
+
+        let mut note = sample_node();
+        note.relations = vec![crate::types::Relation {
+            rel_type: "parent_project".to_string(),
+            target: project_id.clone(),
+        }];
+        engine.create_node("notes/raw.md", &note, "\n").unwrap();
+
+        let before = crate::distillation::queue(&engine.cache, &project_id).unwrap();
+        assert_eq!(before.len(), 1);
+
+        engine
+            .set_distillation_level("notes/raw.md", crate::types::DistillationLevel::Summarized)
+            .unwrap();
+        let after = crate::distillation::queue(&engine.cache, &project_id).unwrap();
+        assert!(after.is_empty());
     }
 
     #[test]
