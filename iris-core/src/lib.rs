@@ -7,6 +7,7 @@
 //! - **SQLite cache** — derived, rebuildable index (to come)
 //! - **Git integration** — vault-as-repository (to come)
 
+pub mod activation;
 pub mod cache;
 pub mod distillation;
 pub mod engine;

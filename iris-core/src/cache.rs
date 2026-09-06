@@ -19,6 +19,9 @@ pub struct CachedNode {
     pub id: String,
     pub node_type: String,
     pub path: String,
+    /// RFC3339, always present (`Node::created` is required). Powers
+    /// recency ordering (e.g. guided activation's "recently-added material").
+    pub created: String,
     pub status: Option<String>,
     pub priority: Option<String>,
     pub scheduled_date: Option<String>,
@@ -33,6 +36,12 @@ pub struct CachedNode {
     /// `raw` / `bolded` / `highlighted` / `summarized`, or `None` if unset
     /// (treated as not-yet-distilled — SCHEMA_SPEC's `distillation_level`).
     pub distillation_level: Option<String>,
+    /// RFC3339 `event.start`, if this is an `event` node with one set.
+    /// Powers guided activation's "upcoming calendar constraints".
+    pub event_start: Option<String>,
+    /// `annotation.resolved` — powers guided activation's "unresolved
+    /// decisions" (an open, unresolved comment). Meaningless for other types.
+    pub resolved: bool,
     pub domain: Option<String>,
     /// Comma-joined tags (SQLite has no array type). See `search.rs` for how
     /// tag filtering matches against this.
@@ -70,6 +79,7 @@ impl Cache {
                     id             TEXT PRIMARY KEY,
                     node_type      TEXT NOT NULL,
                     path           TEXT NOT NULL,
+                    created        TEXT NOT NULL DEFAULT '',
                     status         TEXT,
                     priority       TEXT,
                     scheduled_date TEXT,
@@ -78,6 +88,8 @@ impl Cache {
                     has_project    INTEGER NOT NULL DEFAULT 0,
                     parent_project TEXT,
                     distillation_level TEXT,
+                    event_start    TEXT,
+                    resolved       INTEGER NOT NULL DEFAULT 0,
                     domain         TEXT,
                     tags           TEXT NOT NULL DEFAULT '',
                     body           TEXT NOT NULL DEFAULT '',
@@ -129,14 +141,15 @@ impl Cache {
 
             tx.execute(
                 "INSERT INTO nodes
-                    (id, node_type, path, status, priority, scheduled_date, due_date,
-                     deleted_at, has_project, parent_project, distillation_level,
-                     domain, tags, body, is_template)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                    (id, node_type, path, created, status, priority, scheduled_date, due_date,
+                     deleted_at, has_project, parent_project, distillation_level, event_start,
+                     resolved, domain, tags, body, is_template)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                 rusqlite::params![
                     &parsed.node.id,
                     &node_type,
                     &rel_path,
+                    parsed.node.created.to_rfc3339(),
                     &parsed.node.status,
                     &priority,
                     parsed.node.scheduled_date.map(|d| d.to_string()),
@@ -145,6 +158,8 @@ impl Cache {
                     parent_project.is_some() as i64,
                     &parent_project,
                     &distillation_level,
+                    parsed.node.start.map(|d| d.to_rfc3339()),
+                    parsed.node.resolved as i64,
                     &parsed.node.domain,
                     &tags,
                     &parsed.body,
@@ -184,6 +199,7 @@ impl Cache {
                     id: row.get("id")?,
                     node_type: row.get("node_type")?,
                     path: row.get("path")?,
+                    created: row.get("created")?,
                     status: row.get("status")?,
                     priority: row.get("priority")?,
                     scheduled_date: row.get("scheduled_date")?,
@@ -192,6 +208,8 @@ impl Cache {
                     has_project: row.get::<_, i64>("has_project")? != 0,
                     parent_project: row.get("parent_project")?,
                     distillation_level: row.get("distillation_level")?,
+                    event_start: row.get("event_start")?,
+                    resolved: row.get::<_, i64>("resolved")? != 0,
                     domain: row.get("domain")?,
                     tags: row.get("tags")?,
                     body: row.get("body")?,
