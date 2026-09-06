@@ -292,6 +292,53 @@ impl Engine {
         )
     }
 
+    /// Complete a task: sets `status: "done"`. If it carries a `recurrence`,
+    /// computes the next occurrence in this *same* write/commit and, unless
+    /// the recurrence has ended (`until`/`count` exhausted, or the RRULE
+    /// produces nothing further), reopens it for the next cycle instead of
+    /// leaving it done — advancing `due_date` (or `scheduled_date` if that's
+    /// the only date set) and incrementing `recurrence_occurrences`. A task
+    /// is never spawned anew per cycle: one node, its date mutated in place,
+    /// with the full history of every past due date already in git.
+    pub fn complete_task(&mut self, rel_path: impl AsRef<Path>) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.status = Some("done".to_string());
+
+        if let Some(recurrence) = node.recurrence.clone() {
+            if let Some(due) = node.due_date.or(node.scheduled_date) {
+                let today = Utc::now().date_naive();
+                let occurrences_so_far = node.recurrence_occurrences.unwrap_or(0);
+                if let Some(next_due) =
+                    crate::recurrence::next_occurrence(&recurrence, due, today, occurrences_so_far)?
+                {
+                    node.status = None;
+                    if node.due_date.is_some() {
+                        node.due_date = Some(next_due);
+                    } else {
+                        node.scheduled_date = Some(next_due);
+                    }
+                    node.recurrence_occurrences = Some(occurrences_so_far + 1);
+                }
+            }
+        }
+
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Complete {}", rel_path.display()),
+        )
+    }
+
     /// Move a project to a new `project_status`, enforcing the explicit state
     /// machine from ADR-018/`DECISION_LOG.md`: `someday → planned → active →
     /// paused → active`, `active → completed`, `planned → cancelled`,
@@ -647,6 +694,7 @@ fn new_annotation(target_id: crate::types::NodeId, text_fragment: Option<String>
         estimated_pomodoros: None,
         actual_pomodoros: None,
         recurrence: None,
+        recurrence_occurrences: None,
         checklist: vec![],
         start: None,
         end: None,
@@ -743,6 +791,7 @@ mod tests {
             estimated_pomodoros: None,
             actual_pomodoros: None,
             recurrence: None,
+            recurrence_occurrences: None,
             checklist: vec![],
             start: None,
             end: None,
@@ -1178,6 +1227,91 @@ mod tests {
             .unwrap();
         let after = crate::distillation::queue(&engine.cache, &project_id).unwrap();
         assert!(after.is_empty());
+    }
+
+    #[test]
+    fn complete_task_without_recurrence_stays_done() {
+        let dir = TempDir::new("complete-no-recur");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("tasks/a.md", &sample_node(), "\n")
+            .unwrap();
+
+        engine.complete_task("tasks/a.md").unwrap();
+        let node = engine.read_node("tasks/a.md").unwrap().node;
+        assert_eq!(node.status.as_deref(), Some("done"));
+    }
+
+    #[test]
+    fn complete_task_with_fixed_recurrence_reopens_and_advances_due_date() {
+        let dir = TempDir::new("complete-fixed");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut task = sample_node();
+        task.due_date = Some(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        task.recurrence = Some(crate::types::Recurrence::Fixed {
+            interval: "P1M".to_string(),
+            until: None,
+            count: None,
+        });
+        engine.create_node("tasks/rent.md", &task, "\n").unwrap();
+
+        engine.complete_task("tasks/rent.md").unwrap();
+        let node = engine.read_node("tasks/rent.md").unwrap().node;
+        assert_eq!(node.status, None); // reopened for the next cycle
+        assert_eq!(
+            node.due_date,
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap())
+        );
+        assert_eq!(node.recurrence_occurrences, Some(1));
+    }
+
+    #[test]
+    fn complete_task_stops_recurring_once_count_is_exhausted() {
+        let dir = TempDir::new("complete-count");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut task = sample_node();
+        task.due_date = Some(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        task.recurrence = Some(crate::types::Recurrence::Fixed {
+            interval: "P1D".to_string(),
+            until: None,
+            count: Some(1),
+        });
+        engine.create_node("tasks/once.md", &task, "\n").unwrap();
+
+        engine.complete_task("tasks/once.md").unwrap();
+        let node = engine.read_node("tasks/once.md").unwrap().node;
+        // count: 1 means this first completion was already the last allowed
+        // occurrence — stays done, recurrence left intact as a record.
+        assert_eq!(node.status.as_deref(), Some("done"));
+        assert_eq!(
+            node.due_date,
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+        );
+    }
+
+    #[test]
+    fn complete_task_is_undoable_back_to_the_original_due_date() {
+        let dir = TempDir::new("complete-undo");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let mut task = sample_node();
+        task.due_date = Some(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        task.recurrence = Some(crate::types::Recurrence::Fixed {
+            interval: "P1W".to_string(),
+            until: None,
+            count: None,
+        });
+        engine.create_node("tasks/weekly.md", &task, "\n").unwrap();
+
+        engine.complete_task("tasks/weekly.md").unwrap();
+        engine.undo().unwrap();
+
+        let node = engine.read_node("tasks/weekly.md").unwrap().node;
+        assert_eq!(node.status, None);
+        assert_eq!(
+            node.due_date,
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+        );
+        assert_eq!(node.recurrence_occurrences, None);
     }
 
     #[test]

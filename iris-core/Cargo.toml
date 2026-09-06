@@ -23,3 +23,4 @@ typst-as-lib = { version = "0.16.0", features = ["typst-kit-fonts", "typst-kit-e
 typst-layout = "0.15"
 typst-pdf = "0.15"
 typst = "0.15"
+rrule = "0.14.0"

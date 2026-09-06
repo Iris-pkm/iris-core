@@ -124,6 +124,7 @@ fn import_one(
         estimated_pomodoros: None,
         actual_pomodoros: None,
         recurrence: None,
+        recurrence_occurrences: None,
         checklist: vec![],
         start: None,
         end: None,

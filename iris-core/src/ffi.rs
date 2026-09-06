@@ -12,7 +12,7 @@
 //! converted back with `TryFrom<FfiNode>` (fallible: a native caller could
 //! hand back a malformed date/timestamp string).
 
-use crate::types::{AnnotationAnchor, Node};
+use crate::types::{AnnotationAnchor, Node, Recurrence};
 use chrono::{DateTime, NaiveDate, Utc};
 
 /// Errors converting an `FfiNode` (native-side data) back into a `Node`.
@@ -88,6 +88,92 @@ impl TryFrom<FfiAnnotationAnchor> for AnnotationAnchor {
     }
 }
 
+/// `Recurrence` with `until`'s `NaiveDate` as an ISO-8601 string, same reason
+/// as everywhere else in this module: `uniffi` has no `NaiveDate` support.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiRecurrence {
+    Fixed {
+        interval: String,
+        until: Option<String>,
+        count: Option<u32>,
+    },
+    Flexible {
+        interval: String,
+        until: Option<String>,
+        count: Option<u32>,
+    },
+    Rrule {
+        rrule: String,
+        dtstart: String,
+    },
+}
+
+impl From<&Recurrence> for FfiRecurrence {
+    fn from(r: &Recurrence) -> Self {
+        match r {
+            Recurrence::Fixed {
+                interval,
+                until,
+                count,
+            } => FfiRecurrence::Fixed {
+                interval: interval.clone(),
+                until: until.as_ref().map(to_iso_date),
+                count: *count,
+            },
+            Recurrence::Flexible {
+                interval,
+                until,
+                count,
+            } => FfiRecurrence::Flexible {
+                interval: interval.clone(),
+                until: until.as_ref().map(to_iso_date),
+                count: *count,
+            },
+            Recurrence::Rrule { rrule, dtstart } => FfiRecurrence::Rrule {
+                rrule: rrule.clone(),
+                dtstart: to_iso_date(dtstart),
+            },
+        }
+    }
+}
+
+impl TryFrom<FfiRecurrence> for Recurrence {
+    type Error = FfiConversionError;
+
+    fn try_from(r: FfiRecurrence) -> Result<Self, Self::Error> {
+        Ok(match r {
+            FfiRecurrence::Fixed {
+                interval,
+                until,
+                count,
+            } => Recurrence::Fixed {
+                interval,
+                until: until
+                    .as_deref()
+                    .map(|v| from_iso_date("recurrence.until", v))
+                    .transpose()?,
+                count,
+            },
+            FfiRecurrence::Flexible {
+                interval,
+                until,
+                count,
+            } => Recurrence::Flexible {
+                interval,
+                until: until
+                    .as_deref()
+                    .map(|v| from_iso_date("recurrence.until", v))
+                    .transpose()?,
+                count,
+            },
+            FfiRecurrence::Rrule { rrule, dtstart } => Recurrence::Rrule {
+                rrule,
+                dtstart: from_iso_date("recurrence.dtstart", &dtstart)?,
+            },
+        })
+    }
+}
+
 /// `Node`, boundary-safe: every `DateTime<Utc>` is an RFC3339 string, every
 /// `NaiveDate` an ISO-8601 (`YYYY-MM-DD`) string, `anchor` uses
 /// `FfiAnnotationAnchor`. Field order and names otherwise match `Node`.
@@ -114,7 +200,8 @@ pub struct FfiNode {
     pub due_date: Option<String>,
     pub estimated_pomodoros: Option<u32>,
     pub actual_pomodoros: Option<u32>,
-    pub recurrence: Option<crate::types::Recurrence>,
+    pub recurrence: Option<FfiRecurrence>,
+    pub recurrence_occurrences: Option<u32>,
     pub checklist: Vec<crate::types::ChecklistItem>,
     pub start: Option<String>,
     pub end: Option<String>,
@@ -161,7 +248,8 @@ impl From<&Node> for FfiNode {
             due_date: n.due_date.as_ref().map(to_iso_date),
             estimated_pomodoros: n.estimated_pomodoros,
             actual_pomodoros: n.actual_pomodoros,
-            recurrence: n.recurrence.clone(),
+            recurrence: n.recurrence.as_ref().map(FfiRecurrence::from),
+            recurrence_occurrences: n.recurrence_occurrences,
             checklist: n.checklist.clone(),
             start: n.start.as_ref().map(to_rfc3339),
             end: n.end.as_ref().map(to_rfc3339),
@@ -228,7 +316,8 @@ impl TryFrom<FfiNode> for Node {
                 .transpose()?,
             estimated_pomodoros: f.estimated_pomodoros,
             actual_pomodoros: f.actual_pomodoros,
-            recurrence: f.recurrence,
+            recurrence: f.recurrence.map(Recurrence::try_from).transpose()?,
+            recurrence_occurrences: f.recurrence_occurrences,
             checklist: f.checklist,
             start: f
                 .start
@@ -315,9 +404,12 @@ mod tests {
             due_date: None,
             estimated_pomodoros: Some(4),
             actual_pomodoros: None,
-            recurrence: Some(crate::types::Recurrence::Rrule {
-                rrule: "FREQ=DAILY".to_string(),
+            recurrence: Some(crate::types::Recurrence::Fixed {
+                interval: "P1M".to_string(),
+                until: Some(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
+                count: Some(12),
             }),
+            recurrence_occurrences: Some(2),
             checklist: vec![crate::types::ChecklistItem {
                 text: "step 1".to_string(),
                 done: true,

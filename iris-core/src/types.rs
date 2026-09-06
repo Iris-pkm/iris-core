@@ -102,15 +102,46 @@ pub fn sample_custom_node_type() -> NodeType {
 }
 
 // ---------------------------------------------------------------------------
-// Recurrence (provisional)
+// Recurrence — canonical (DECISION_LOG.md's open thread resolved: the
+// existing 3-variant, mode-tagged shape *is* canonical; each mode keeps its
+// own fields rather than collapsing to one RRULE-for-everything
+// representation, since Fixed/Flexible's "relative to due date" vs.
+// "relative to completion" distinction has no natural RRULE encoding)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+/// `until`/`count` end conditions apply to `Fixed`/`Flexible` only — `Rrule`
+/// already has native `UNTIL=`/`COUNT=` syntax, so duplicating them as
+/// struct fields would just be two ways to say the same thing.
+///
+/// Not `uniffi::Enum`: `until: Option<NaiveDate>` has no UniFFI
+/// representation, same reason `Node` itself needs `ffi::FfiNode` — see
+/// `ffi::FfiRecurrence` for the boundary-safe mirror.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum Recurrence {
-    Fixed { interval: String },
-    Flexible { interval: String },
-    Rrule { rrule: String },
+    Fixed {
+        interval: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<NaiveDate>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        count: Option<u32>,
+    },
+    Flexible {
+        interval: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<NaiveDate>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        count: Option<u32>,
+    },
+    Rrule {
+        rrule: String,
+        /// The series' original anchor date (iCalendar `DTSTART`). RRULE's
+        /// own `COUNT`/`UNTIL` are relative to this, not to whatever the
+        /// current `due_date` happens to be — re-deriving it from a moving
+        /// due date would silently reset `COUNT` every cycle. Captured once
+        /// when the recurrence is first set, never changed afterward.
+        dtstart: NaiveDate,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +228,11 @@ pub struct Node {
     pub actual_pomodoros: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recurrence: Option<Recurrence>,
+    /// How many times `recurrence` has already fired (0 for the very first
+    /// completion). Only meaningful alongside `recurrence`; checked against
+    /// `Recurrence::Fixed`/`Flexible`'s `count` field (`recurrence.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recurrence_occurrences: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checklist: Vec<ChecklistItem>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
