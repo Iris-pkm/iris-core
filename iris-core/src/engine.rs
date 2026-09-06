@@ -266,6 +266,32 @@ impl Engine {
         )
     }
 
+    /// Log one completed pomodoro/focus session against a node, incrementing
+    /// `actual_pomodoros` (ARCHITECTURE.md §12: "unit of effort is the
+    /// pomodoro... estimates, actuals, velocity, and burndown are all
+    /// denominated in pomodoros... grounded in real logged time"). The timer
+    /// itself is a UI concern; this is just the durable record of one
+    /// completed session.
+    pub fn log_pomodoro(&mut self, rel_path: impl AsRef<Path>) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
+        let existing = self.vault.read_node(rel_path)?;
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node.clone()),
+                body: existing.body.clone(),
+            },
+        );
+        let mut node = existing.node;
+        node.actual_pomodoros = Some(node.actual_pomodoros.unwrap_or(0) + 1);
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!("Log pomodoro {}", rel_path.display()),
+        )
+    }
+
     /// Move a project to a new `project_status`, enforcing the explicit state
     /// machine from ADR-018/`DECISION_LOG.md`: `someday → planned → active →
     /// paused → active`, `active → completed`, `planned → cancelled`,
@@ -1152,6 +1178,44 @@ mod tests {
             .unwrap();
         let after = crate::distillation::queue(&engine.cache, &project_id).unwrap();
         assert!(after.is_empty());
+    }
+
+    #[test]
+    fn log_pomodoro_increments_and_is_undoable() {
+        let dir = TempDir::new("pomodoro");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("tasks/a.md", &sample_node(), "\n")
+            .unwrap();
+        assert_eq!(
+            engine
+                .read_node("tasks/a.md")
+                .unwrap()
+                .node
+                .actual_pomodoros,
+            None
+        );
+
+        engine.log_pomodoro("tasks/a.md").unwrap();
+        engine.log_pomodoro("tasks/a.md").unwrap();
+        assert_eq!(
+            engine
+                .read_node("tasks/a.md")
+                .unwrap()
+                .node
+                .actual_pomodoros,
+            Some(2)
+        );
+
+        engine.undo().unwrap();
+        assert_eq!(
+            engine
+                .read_node("tasks/a.md")
+                .unwrap()
+                .node
+                .actual_pomodoros,
+            Some(1)
+        );
     }
 
     #[test]
