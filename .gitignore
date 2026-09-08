@@ -6,4 +6,6 @@ target/
 .nodeterm/
 .DS_Store
 .git-private/
+.git-design/
+design/
 AGENTS.md
