@@ -11,14 +11,14 @@ use crate::types::NodeType;
 use crate::vault::Vault;
 
 /// A file whose frontmatter failed to parse.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MalformedFile {
     pub path: String,
     pub error: String,
 }
 
 /// A relation whose target id doesn't exist anywhere in the vault.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DanglingRelation {
     pub source_id: String,
     pub rel_type: String,
@@ -31,13 +31,13 @@ pub struct DanglingRelation {
 /// position nor text fragment] resolves, the annotation goes to an
 /// `orphaned` state"). A reply annotation (no text anchor, `annotates` a
 /// parent annotation) is never flagged here — it has nothing to resolve.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OrphanedAnnotation {
     pub annotation_id: String,
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
 pub struct IntegrityReport {
     pub malformed_files: Vec<MalformedFile>,
     pub dangling_relations: Vec<DanglingRelation>,

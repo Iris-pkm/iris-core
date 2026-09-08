@@ -561,6 +561,14 @@ impl Engine {
         self.vault.root()
     }
 
+    /// Read-only access to the cache, for the query-layer modules
+    /// (`views`/`search`/`distillation`/`activation`/`dependencies`) that
+    /// take `&Cache` rather than `&Engine` — they're pure queries, not
+    /// mutations, so they don't need the rest of `Engine`.
+    pub fn cache(&self) -> &Cache {
+        &self.cache
+    }
+
     /// Tag the current HEAD as a named checkpoint (ARCHITECTURE.md §5).
     pub fn create_checkpoint(&self, name: &str) -> IrisResult<()> {
         self.git.create_checkpoint(name)?;

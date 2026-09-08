@@ -36,7 +36,7 @@ use crate::distillation;
 use crate::error::IrisResult;
 
 /// The full assembled environment for one active project.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, uniffi::Record)]
 pub struct ActivationEnvironment {
     pub distillation_queue: Vec<CachedNode>,
     pub unresolved_decisions: Vec<CachedNode>,

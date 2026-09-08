@@ -375,6 +375,395 @@ pub fn round_trip_node(ffi: FfiNode) -> Result<FfiNode, FfiConversionError> {
     Ok(FfiNode::from(&node))
 }
 
+// ---------------------------------------------------------------------------
+// The real Engine API surface (ADR-031) — everything above this point was
+// spike scope proving the toolchain and the DTO pattern; this is native
+// shells' actual entry point into iris-core. One `FfiEngine` object wraps
+// `Engine` behind a `Mutex` (UniFFI objects hand out `Arc<Self>`, and every
+// `Engine` method needs `&mut self` for its own write path); every method
+// here is a thin translation to/from the FFI-safe types defined above and
+// elsewhere in this module, with all the actual logic staying in `engine.rs`
+// and the query-layer modules (`views`/`search`/`distillation`/`activation`/
+// `dependencies`) unchanged.
+// ---------------------------------------------------------------------------
+
+use crate::cache::CachedNode;
+use crate::engine::Engine;
+use crate::integrity::IntegrityReport;
+use crate::types::{DistillationLevel, NodeId, ProjectStatus};
+use std::sync::{Arc, Mutex};
+
+/// Every `Engine` method's error collapses to this at the boundary — native
+/// callers get a message, not a typed variant tree that would have to mirror
+/// `IrisError` exactly (and drift from it) on every target language.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum FfiEngineError {
+    #[error("{0}")]
+    Failed(String),
+}
+
+impl From<crate::error::IrisError> for FfiEngineError {
+    fn from(e: crate::error::IrisError) -> Self {
+        FfiEngineError::Failed(e.to_string())
+    }
+}
+
+/// `ParsedNode` with `node` as `FfiNode` — the read-side counterpart to
+/// passing an `FfiNode` into a write method.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiParsedNode {
+    pub node: FfiNode,
+    pub body: String,
+}
+
+impl TryFrom<crate::parser::ParsedNode> for FfiParsedNode {
+    type Error = FfiConversionError;
+
+    fn try_from(p: crate::parser::ParsedNode) -> Result<Self, Self::Error> {
+        Ok(FfiParsedNode {
+            node: FfiNode::from(&p.node),
+            body: p.body,
+        })
+    }
+}
+
+/// `Engine::restore_from_backup`'s return value can't be a UniFFI
+/// constructor (constructors return `Self`/`Result<Self, E>`, not a tuple),
+/// so it's a plain exported function returning this record instead.
+#[derive(uniffi::Record)]
+pub struct FfiRestoreResult {
+    pub engine: Arc<FfiEngine>,
+    pub report: IntegrityReport,
+}
+
+#[derive(uniffi::Object)]
+pub struct FfiEngine {
+    inner: Mutex<Engine>,
+}
+
+impl FfiEngine {
+    fn wrap(engine: Engine) -> Arc<Self> {
+        Arc::new(FfiEngine {
+            inner: Mutex::new(engine),
+        })
+    }
+
+    /// The lock is only ever held for the duration of one `Engine` call —
+    /// never across an FFI round-trip — so a poisoned lock means a prior
+    /// call panicked inside `iris-core` itself, a bug worth surfacing loudly
+    /// rather than quietly recovering from.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Engine> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+#[uniffi::export]
+impl FfiEngine {
+    #[uniffi::constructor]
+    pub fn init(path: String) -> Result<Arc<Self>, FfiEngineError> {
+        Ok(Self::wrap(Engine::init(path)?))
+    }
+
+    #[uniffi::constructor]
+    pub fn open(path: String) -> Result<Arc<Self>, FfiEngineError> {
+        Ok(Self::wrap(Engine::open(path)?))
+    }
+
+    // -- node CRUD --
+
+    pub fn create_node(
+        &self,
+        rel_path: String,
+        node: FfiNode,
+        body: String,
+    ) -> Result<(), FfiEngineError> {
+        let node: Node = node.try_into().map_err(ffi_conv_err)?;
+        Ok(self.lock().create_node(rel_path, &node, &body)?)
+    }
+
+    pub fn read_node(&self, rel_path: String) -> Result<FfiParsedNode, FfiEngineError> {
+        let parsed = self.lock().read_node(rel_path)?;
+        parsed.try_into().map_err(ffi_conv_err)
+    }
+
+    pub fn update_node(&self, rel_path: String, node: FfiNode) -> Result<(), FfiEngineError> {
+        let node: Node = node.try_into().map_err(ffi_conv_err)?;
+        Ok(self.lock().update_node(rel_path, &node)?)
+    }
+
+    pub fn delete_node(&self, rel_path: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().delete_node(rel_path)?)
+    }
+
+    pub fn restore_node(&self, rel_path: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().restore_node(rel_path)?)
+    }
+
+    pub fn instantiate_template(
+        &self,
+        template_rel_path: String,
+        new_rel_path: String,
+    ) -> Result<(), FfiEngineError> {
+        Ok(self
+            .lock()
+            .instantiate_template(template_rel_path, new_rel_path)?)
+    }
+
+    // -- anchored comments --
+
+    pub fn add_comment(
+        &self,
+        target_rel_path: String,
+        text_fragment: String,
+        comment_rel_path: String,
+        body: String,
+    ) -> Result<(), FfiEngineError> {
+        Ok(self
+            .lock()
+            .add_comment(target_rel_path, &text_fragment, comment_rel_path, &body)?)
+    }
+
+    pub fn reply_to_annotation(
+        &self,
+        parent_rel_path: String,
+        reply_rel_path: String,
+        body: String,
+    ) -> Result<(), FfiEngineError> {
+        Ok(self
+            .lock()
+            .reply_to_annotation(parent_rel_path, reply_rel_path, &body)?)
+    }
+
+    pub fn set_annotation_resolved(
+        &self,
+        rel_path: String,
+        resolved: bool,
+    ) -> Result<(), FfiEngineError> {
+        Ok(self.lock().set_annotation_resolved(rel_path, resolved)?)
+    }
+
+    // -- distillation / planning --
+
+    pub fn set_distillation_level(
+        &self,
+        rel_path: String,
+        level: DistillationLevel,
+    ) -> Result<(), FfiEngineError> {
+        Ok(self.lock().set_distillation_level(rel_path, level)?)
+    }
+
+    pub fn set_project_status(
+        &self,
+        rel_path: String,
+        status: ProjectStatus,
+    ) -> Result<bool, FfiEngineError> {
+        Ok(self.lock().set_project_status(rel_path, status)?)
+    }
+
+    pub fn log_pomodoro(&self, rel_path: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().log_pomodoro(rel_path)?)
+    }
+
+    pub fn complete_task(&self, rel_path: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().complete_task(rel_path)?)
+    }
+
+    // -- Trash / retention --
+
+    pub fn purge_expired_trash_default(&self) -> Result<u32, FfiEngineError> {
+        Ok(self.lock().purge_expired_trash_default()? as u32)
+    }
+
+    pub fn purge_expired_trash_days(&self, days: u32) -> Result<u32, FfiEngineError> {
+        Ok(self
+            .lock()
+            .purge_expired_trash(chrono::Duration::days(i64::from(days)))? as u32)
+    }
+
+    // -- undo/redo --
+
+    pub fn undo(&self) -> Result<bool, FfiEngineError> {
+        Ok(self.lock().undo()?)
+    }
+
+    pub fn redo(&self) -> Result<bool, FfiEngineError> {
+        Ok(self.lock().redo()?)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.lock().can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.lock().can_redo()
+    }
+
+    // -- checkpoints / branching --
+
+    pub fn create_checkpoint(&self, name: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().create_checkpoint(&name)?)
+    }
+
+    pub fn list_checkpoints(&self) -> Result<Vec<String>, FfiEngineError> {
+        Ok(self.lock().list_checkpoints()?)
+    }
+
+    pub fn create_branch(&self, name: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().create_branch(&name)?)
+    }
+
+    pub fn list_branches(&self) -> Result<Vec<String>, FfiEngineError> {
+        Ok(self.lock().list_branches()?)
+    }
+
+    pub fn current_branch(&self) -> Result<Option<String>, FfiEngineError> {
+        Ok(self.lock().current_branch()?)
+    }
+
+    pub fn checkout(&self, name: String) -> Result<(), FfiEngineError> {
+        Ok(self.lock().checkout(&name)?)
+    }
+
+    // -- cache / integrity --
+
+    pub fn rebuild_cache(&self) -> Result<(), FfiEngineError> {
+        Ok(self.lock().rebuild_cache()?)
+    }
+
+    pub fn check_integrity(&self) -> Result<IntegrityReport, FfiEngineError> {
+        Ok(self.lock().check_integrity()?)
+    }
+
+    pub fn vault_root(&self) -> String {
+        self.lock().vault_root().display().to_string()
+    }
+
+    // -- task views (ARCHITECTURE.md §12, `views.rs`) --
+
+    pub fn inbox(&self) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::views::inbox(self.lock().cache())?)
+    }
+
+    pub fn today(&self, today: String) -> Result<Vec<CachedNode>, FfiEngineError> {
+        let today = from_iso_date("today", &today).map_err(ffi_conv_err)?;
+        Ok(crate::views::today(self.lock().cache(), today)?)
+    }
+
+    pub fn upcoming(&self, from: String, days: u32) -> Result<Vec<CachedNode>, FfiEngineError> {
+        let from = from_iso_date("from", &from).map_err(ffi_conv_err)?;
+        Ok(crate::views::upcoming(self.lock().cache(), from, days)?)
+    }
+
+    pub fn someday_maybe(&self) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::views::someday_maybe(self.lock().cache())?)
+    }
+
+    pub fn logbook(&self) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::views::logbook(self.lock().cache())?)
+    }
+
+    pub fn trash(&self) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::views::trash(self.lock().cache())?)
+    }
+
+    // -- basic search (`search.rs`) --
+
+    pub fn search(
+        &self,
+        query: String,
+        node_type: Option<String>,
+        domain: Option<String>,
+        tag: Option<String>,
+    ) -> Result<Vec<CachedNode>, FfiEngineError> {
+        let filters = crate::search::SearchFilters {
+            node_type: node_type.as_deref(),
+            domain: domain.as_deref(),
+            tag: tag.as_deref(),
+        };
+        Ok(crate::search::search(
+            self.lock().cache(),
+            &query,
+            &filters,
+        )?)
+    }
+
+    // -- distillation queue (`distillation.rs`) --
+
+    pub fn distillation_queue(
+        &self,
+        project_id: NodeId,
+    ) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::distillation::queue(
+            self.lock().cache(),
+            &project_id,
+        )?)
+    }
+
+    // -- guided project activation (`activation.rs`, ADR-023) --
+
+    pub fn activation_environment(
+        &self,
+        project_id: NodeId,
+    ) -> Result<crate::activation::ActivationEnvironment, FfiEngineError> {
+        Ok(crate::activation::assemble(
+            self.lock().cache(),
+            &project_id,
+        )?)
+    }
+
+    // -- task dependencies (`dependencies.rs`, ADR-017) --
+
+    pub fn blocked_by(&self, node_id: NodeId) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::dependencies::blocked_by(
+            self.lock().cache(),
+            &node_id,
+        )?)
+    }
+
+    pub fn blocked_by_incoming(&self, node_id: NodeId) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::dependencies::blocked_by_incoming(
+            self.lock().cache(),
+            &node_id,
+        )?)
+    }
+
+    pub fn is_blocked(&self, node_id: NodeId) -> Result<bool, FfiEngineError> {
+        Ok(crate::dependencies::is_blocked(
+            self.lock().cache(),
+            &node_id,
+        )?)
+    }
+
+    pub fn blocks(&self, node_id: NodeId) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::dependencies::blocks(self.lock().cache(), &node_id)?)
+    }
+
+    pub fn depended_on_by(&self, node_id: NodeId) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::dependencies::depended_on_by(
+            self.lock().cache(),
+            &node_id,
+        )?)
+    }
+}
+
+/// The git half of restore-from-backup can't be a constructor (see
+/// `FfiRestoreResult`'s doc comment), so it's exported as a plain function.
+#[uniffi::export]
+pub fn restore_from_backup(
+    remote_url: String,
+    dest_path: String,
+) -> Result<FfiRestoreResult, FfiEngineError> {
+    let (engine, report) = Engine::restore_from_backup(&remote_url, &dest_path)?;
+    Ok(FfiRestoreResult {
+        engine: FfiEngine::wrap(engine),
+        report,
+    })
+}
+
+fn ffi_conv_err(e: FfiConversionError) -> FfiEngineError {
+    FfiEngineError::Failed(e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -475,5 +864,176 @@ mod tests {
             result,
             Err(FfiConversionError::InvalidDate { field, .. }) if field == "scheduled_date"
         ));
+    }
+
+    // -----------------------------------------------------------------
+    // FfiEngine — the real surface, exercised the way a native shell would:
+    // through Arc<FfiEngine>, FfiNode in and out, no direct Engine access.
+    // -----------------------------------------------------------------
+
+    struct TempDir(std::path::PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("iris-ffi-engine-test-{label}-{nanos}"));
+            TempDir(path)
+        }
+        fn path(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn ffi_engine_create_read_update_round_trip() {
+        let dir = TempDir::new("crud");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let node = FfiNode::from(&sample_node());
+        engine
+            .create_node(
+                "notes/a.md".to_string(),
+                node.clone(),
+                "\n\nHello.\n".to_string(),
+            )
+            .unwrap();
+
+        let read = engine.read_node("notes/a.md".to_string()).unwrap();
+        assert_eq!(read.node.id, node.id);
+        assert!(read.body.contains("Hello."));
+
+        let mut updated = read.node.clone();
+        updated.domain = Some("iris-dev".to_string());
+        engine
+            .update_node("notes/a.md".to_string(), updated)
+            .unwrap();
+        let after = engine.read_node("notes/a.md".to_string()).unwrap();
+        assert_eq!(after.node.domain.as_deref(), Some("iris-dev"));
+    }
+
+    #[test]
+    fn ffi_engine_undo_redo_and_checkpoints() {
+        let dir = TempDir::new("undo-checkpoint");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        engine
+            .create_node(
+                "notes/a.md".to_string(),
+                FfiNode::from(&sample_node()),
+                "\n".to_string(),
+            )
+            .unwrap();
+        assert!(engine.can_undo());
+
+        engine.create_checkpoint("v1".to_string()).unwrap();
+        assert_eq!(engine.list_checkpoints().unwrap(), vec!["v1".to_string()]);
+
+        assert!(engine.undo().unwrap());
+        assert!(engine.read_node("notes/a.md".to_string()).is_err());
+        assert!(engine.redo().unwrap());
+        assert!(engine.read_node("notes/a.md".to_string()).is_ok());
+    }
+
+    #[test]
+    fn ffi_engine_views_and_search_reflect_created_nodes() {
+        let dir = TempDir::new("views");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let mut task = sample_node();
+        task.node_type = NodeType::Task;
+        engine
+            .create_node(
+                "tasks/a.md".to_string(),
+                FfiNode::from(&task),
+                "\n\nfindme\n".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(engine.inbox().unwrap().len(), 1);
+        assert_eq!(
+            engine
+                .search("findme".to_string(), None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn ffi_engine_project_activation_and_distillation_queue() {
+        let dir = TempDir::new("activation");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let mut project = sample_node();
+        project.node_type = NodeType::Project;
+        engine
+            .create_node(
+                "projects/p.md".to_string(),
+                FfiNode::from(&project),
+                "\n".to_string(),
+            )
+            .unwrap();
+        let project_id = engine
+            .read_node("projects/p.md".to_string())
+            .unwrap()
+            .node
+            .id;
+
+        let mut note = sample_node();
+        note.relations = vec![crate::types::Relation {
+            rel_type: "parent_project".to_string(),
+            target: project_id.clone(),
+        }];
+        engine
+            .create_node(
+                "notes/raw.md".to_string(),
+                FfiNode::from(&note),
+                "\n".to_string(),
+            )
+            .unwrap();
+
+        let queue = engine.distillation_queue(project_id.clone()).unwrap();
+        assert_eq!(queue.len(), 1);
+
+        let env = engine.activation_environment(project_id).unwrap();
+        assert_eq!(env.distillation_queue.len(), 1);
+    }
+
+    #[test]
+    fn ffi_restore_from_backup_clones_and_reports_clean() {
+        let source_dir = TempDir::new("restore-source");
+        let source = FfiEngine::init(source_dir.path().to_string_lossy().into_owned()).unwrap();
+        // A clean node, not `sample_node()` — that fixture deliberately
+        // carries a dangling relation for the DTO round-trip tests above,
+        // which would (correctly) fail this test's integrity check.
+        let mut clean_node = sample_node();
+        clean_node.relations = vec![];
+        source
+            .create_node(
+                "notes/a.md".to_string(),
+                FfiNode::from(&clean_node),
+                "\n\nBackup me.\n".to_string(),
+            )
+            .unwrap();
+
+        let dest_dir = TempDir::new("restore-dest");
+        let result = restore_from_backup(
+            source_dir.path().to_string_lossy().into_owned(),
+            dest_dir.path().to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        assert!(result.report.is_clean());
+        let node = result.engine.read_node("notes/a.md".to_string()).unwrap();
+        assert!(node.body.contains("Backup me."));
     }
 }

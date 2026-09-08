@@ -14,7 +14,7 @@ use crate::vault::Vault;
 /// A derived cache row for one node — enough to prove the cache reflects the
 /// vault and to power basic task-view queries (ARCHITECTURE.md §12); richer
 /// queries (search, full relation lookups) build on this later.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CachedNode {
     pub id: String,
     pub node_type: String,
