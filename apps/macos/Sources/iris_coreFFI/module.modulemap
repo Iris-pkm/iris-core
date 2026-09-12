@@ -1,0 +1,4 @@
+module iris_coreFFI {
+    header "iris_coreFFI.h"
+    export *
+}
