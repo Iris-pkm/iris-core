@@ -453,6 +453,37 @@ pub struct FfiRestoreResult {
     pub report: IntegrityReport,
 }
 
+/// `import::ImportReport` with `skipped`'s `PathBuf` as a display string —
+/// `PathBuf` has no UniFFI representation, same reason every other DTO in
+/// this module exists.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiImportReport {
+    pub imported: u32,
+    pub skipped: Vec<FfiSkippedImport>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiSkippedImport {
+    pub path: String,
+    pub reason: String,
+}
+
+impl From<crate::import::ImportReport> for FfiImportReport {
+    fn from(r: crate::import::ImportReport) -> Self {
+        FfiImportReport {
+            imported: r.imported as u32,
+            skipped: r
+                .skipped
+                .into_iter()
+                .map(|(path, reason)| FfiSkippedImport {
+                    path: path.display().to_string(),
+                    reason,
+                })
+                .collect(),
+        }
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct FfiEngine {
     inner: Mutex<Engine>,
@@ -524,6 +555,29 @@ impl FfiEngine {
         Ok(self
             .lock()
             .instantiate_template(template_rel_path, new_rel_path)?)
+    }
+
+    // -- vault import (ADR-025, onboarding-critical) --
+
+    /// Import every `.md` file under `source` as a plain note. No link
+    /// resolution — see `import_obsidian_vault` for wikilink support.
+    pub fn import_markdown_folder(
+        &self,
+        source: String,
+    ) -> Result<FfiImportReport, FfiEngineError> {
+        let mut engine = self.lock();
+        let report =
+            crate::import::import_markdown_folder(&mut engine, std::path::Path::new(&source))?;
+        Ok(report.into())
+    }
+
+    /// Same as `import_markdown_folder`, plus resolving `[[wikilinks]]` into
+    /// `related-to` relations.
+    pub fn import_obsidian_vault(&self, source: String) -> Result<FfiImportReport, FfiEngineError> {
+        let mut engine = self.lock();
+        let report =
+            crate::import::import_obsidian_vault(&mut engine, std::path::Path::new(&source))?;
+        Ok(report.into())
     }
 
     // -- anchored comments --
@@ -1057,5 +1111,22 @@ mod tests {
         assert!(result.report.is_clean());
         let node = result.engine.read_node("notes/a.md".to_string()).unwrap();
         assert!(node.body.contains("Backup me."));
+    }
+
+    #[test]
+    fn ffi_engine_import_markdown_folder() {
+        let src_dir = TempDir::new("import-src");
+        std::fs::create_dir_all(src_dir.path()).unwrap();
+        std::fs::write(src_dir.path().join("hello.md"), "# Hello\n\nplain note").unwrap();
+
+        let vault_dir = TempDir::new("import-vault");
+        let engine = FfiEngine::init(vault_dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let report = engine
+            .import_markdown_folder(src_dir.path().to_string_lossy().into_owned())
+            .unwrap();
+        assert_eq!(report.imported, 1);
+        assert!(report.skipped.is_empty());
+        assert_eq!(engine.inbox().unwrap().len(), 0); // imported as a note, not a task
     }
 }
