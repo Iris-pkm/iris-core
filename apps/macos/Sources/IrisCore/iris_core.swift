@@ -1885,12 +1885,26 @@ public func FfiConverterTypeFfiNode_lower(_ value: FfiNode) -> RustBuffer {
 public struct FfiParsedNode: Equatable, Hashable {
     public var node: FfiNode
     public var body: String
+    /**
+     * The frontmatter exactly as written in the file — Dev Mode's raw view
+     * (`design/canvas/DevMode.dc.html`) shows this verbatim, not a
+     * re-serialization of `node`, so it has to be the parser's own
+     * preserved string rather than derived.
+     */
+    public var rawFrontmatter: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(node: FfiNode, body: String) {
+    public init(node: FfiNode, body: String, 
+        /**
+         * The frontmatter exactly as written in the file — Dev Mode's raw view
+         * (`design/canvas/DevMode.dc.html`) shows this verbatim, not a
+         * re-serialization of `node`, so it has to be the parser's own
+         * preserved string rather than derived.
+         */rawFrontmatter: String) {
         self.node = node
         self.body = body
+        self.rawFrontmatter = rawFrontmatter
     }
 
     
@@ -1910,13 +1924,15 @@ public struct FfiConverterTypeFfiParsedNode: FfiConverterRustBuffer {
         return
             try FfiParsedNode(
                 node: FfiConverterTypeFfiNode.read(from: &buf), 
-                body: FfiConverterString.read(from: &buf)
+                body: FfiConverterString.read(from: &buf), 
+                rawFrontmatter: FfiConverterString.read(from: &buf)
         )
     }
 
     public static func write(_ value: FfiParsedNode, into buf: inout [UInt8]) {
         FfiConverterTypeFfiNode.write(value.node, into: &buf)
         FfiConverterString.write(value.body, into: &buf)
+        FfiConverterString.write(value.rawFrontmatter, into: &buf)
     }
 }
 
