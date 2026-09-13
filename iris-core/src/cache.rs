@@ -180,6 +180,31 @@ impl Cache {
         tx.commit().map_err(sqlite_err)
     }
 
+    /// Raw relation rows touching `node_id` in either direction —
+    /// `(rel_type, source_id, target_id)`. Powers generic connections/
+    /// backlinks views (`connections.rs`) that need the relation type
+    /// alongside the node, which `query_nodes`'s `CachedNode` mapping can't
+    /// carry (it only ever returns `nodes` table columns).
+    pub(crate) fn relations_touching(
+        &self,
+        node_id: &str,
+    ) -> IrisResult<Vec<(String, String, String)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT rel_type, source_id, target_id FROM relations WHERE source_id = ?1 OR target_id = ?1")
+            .map_err(sqlite_err)?;
+        let rows = stmt
+            .query_map([node_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(sqlite_err)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_err)
+    }
+
     /// All cached nodes, ordered by id (deterministic, for comparison/testing).
     pub fn list_nodes(&self) -> IrisResult<Vec<CachedNode>> {
         self.query_nodes("SELECT * FROM nodes ORDER BY id", [])
