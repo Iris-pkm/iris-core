@@ -10,31 +10,50 @@ struct AppShell: View {
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
-    /// The currently open node's vault-relative path, or `nil` if nothing's
-    /// open yet. Real entry points (clicking a row in a list view) don't
-    /// exist yet — task-view lenses and the PARA workbench are next in this
-    /// builder's queue (`design/screen-flow.md` §5) — so this screen is
-    /// reachable via the sidebar's real Project/Area/Resource items for now.
-    @State private var openRelPath: String?
+    /// The currently open node, or `nil` if nothing's open yet. Real entry
+    /// points (clicking a row in a list view) don't exist yet — task-view
+    /// lenses and the PARA workbench are next in this builder's queue
+    /// (`design/screen-flow.md` §5) — so this screen is reachable via the
+    /// sidebar's real Project/Area/Resource items for now. Keeping the whole
+    /// `CachedNode` (not just its path) so the shell can route projects to
+    /// `ProjectView` vs. everything else to the generic `NodeEditorView`
+    /// without a second lookup.
+    @State private var openNode: CachedNode?
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, openRelPath: $openRelPath)
+            Sidebar(engine: engine, openNode: $openNode)
             Divider().background(c.borderDefault)
 
-            if let relPath = openRelPath {
-                HStack(spacing: 0) {
-                    NodeEditorView(engine: engine, relPath: relPath)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Divider().background(c.borderDefault)
-                    RightRail(engine: engine, relPath: relPath)
-                }
+            if let openNode {
+                detail(for: openNode)
             } else {
                 emptyState
             }
         }
         .background(c.bgCanvas)
         .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+    }
+
+    /// Projects get `ProjectView` full-width, no right rail — the mockup
+    /// (`Main.dc.html` vs. `GuidedActivation.dc.html`) confirms Guided
+    /// Activation and the normal project layout both replace the *entire*
+    /// content pane, Connections/Dev Mode included, not just the main
+    /// column next to an unchanged rail. Every other node type keeps the
+    /// generic Node Editor + Connections/Dev Mode rail.
+    @ViewBuilder
+    private func detail(for node: CachedNode) -> some View {
+        if node.nodeType == "project" {
+            ProjectView(engine: engine, relPath: node.path)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            HStack(spacing: 0) {
+                NodeEditorView(engine: engine, relPath: node.path)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider().background(c.borderDefault)
+                RightRail(engine: engine, relPath: node.path)
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -62,7 +81,7 @@ struct AppShell: View {
 /// Worth reconciling once the PARA workbench is actually built.
 private struct Sidebar: View {
     let engine: FfiEngine
-    @Binding var openRelPath: String?
+    @Binding var openNode: CachedNode?
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -132,9 +151,9 @@ private struct Sidebar: View {
     }
 
     private func sidebarRow(_ node: CachedNode) -> some View {
-        let isActive = node.path == openRelPath
+        let isActive = node.path == openNode?.path
         return Button {
-            openRelPath = node.path
+            openNode = node
         } label: {
             Text(titleFor(node))
                 .font(Typography.bodySans())
