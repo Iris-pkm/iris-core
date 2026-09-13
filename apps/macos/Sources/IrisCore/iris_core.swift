@@ -522,6 +522,8 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     
     func completeTask(relPath: String) throws 
     
+    func connections(nodeId: String) throws  -> [Connection]
+    
     func createBranch(name: String) throws 
     
     func createCheckpoint(name: String) throws 
@@ -753,6 +755,15 @@ open func completeTask(relPath: String)throws   {try rustCallWithError(FfiConver
         FfiConverterString.lower(relPath),$0
     )
 }
+}
+    
+open func connections(nodeId: String)throws  -> [Connection]  {
+    return try  FfiConverterSequenceTypeConnection.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_connections(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(nodeId),$0
+    )
+})
 }
     
 open func createBranch(name: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
@@ -1409,6 +1420,68 @@ public func FfiConverterTypeChecklistItem_lift(_ buf: RustBuffer) throws -> Chec
 #endif
 public func FfiConverterTypeChecklistItem_lower(_ value: ChecklistItem) -> RustBuffer {
     return FfiConverterTypeChecklistItem.lower(value)
+}
+
+
+public struct Connection: Equatable, Hashable {
+    public var node: CachedNode
+    public var relType: String
+    public var direction: ConnectionDirection
+    public var label: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(node: CachedNode, relType: String, direction: ConnectionDirection, label: String) {
+        self.node = node
+        self.relType = relType
+        self.direction = direction
+        self.label = label
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Connection: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeConnection: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Connection {
+        return
+            try Connection(
+                node: FfiConverterTypeCachedNode.read(from: &buf), 
+                relType: FfiConverterString.read(from: &buf), 
+                direction: FfiConverterTypeConnectionDirection.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Connection, into buf: inout [UInt8]) {
+        FfiConverterTypeCachedNode.write(value.node, into: &buf)
+        FfiConverterString.write(value.relType, into: &buf)
+        FfiConverterTypeConnectionDirection.write(value.direction, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConnection_lift(_ buf: RustBuffer) throws -> Connection {
+    return try FfiConverterTypeConnection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConnection_lower(_ value: Connection) -> RustBuffer {
+    return FfiConverterTypeConnection.lower(value)
 }
 
 
@@ -2205,6 +2278,79 @@ public func FfiConverterTypeRelation_lift(_ buf: RustBuffer) throws -> Relation 
 public func FfiConverterTypeRelation_lower(_ value: Relation) -> RustBuffer {
     return FfiConverterTypeRelation.lower(value)
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ConnectionDirection: Equatable, Hashable {
+    
+    /**
+     * This node's own relation, pointing at `node`.
+     */
+    case outgoing
+    /**
+     * `node`'s relation, pointing at this node.
+     */
+    case incoming
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ConnectionDirection: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeConnectionDirection: FfiConverterRustBuffer {
+    typealias SwiftType = ConnectionDirection
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConnectionDirection {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .outgoing
+        
+        case 2: return .incoming
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ConnectionDirection, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .outgoing:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .incoming:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConnectionDirection_lift(_ buf: RustBuffer) throws -> ConnectionDirection {
+    return try FfiConverterTypeConnectionDirection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConnectionDirection_lower(_ value: ConnectionDirection) -> RustBuffer {
+    return FfiConverterTypeConnectionDirection.lower(value)
+}
+
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
@@ -3233,6 +3379,31 @@ fileprivate struct FfiConverterSequenceTypeChecklistItem: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeConnection: FfiConverterRustBuffer {
+    typealias SwiftType = [Connection]
+
+    public static func write(_ value: [Connection], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeConnection.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Connection] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Connection]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeConnection.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDanglingRelation: FfiConverterRustBuffer {
     typealias SwiftType = [DanglingRelation]
 
@@ -3480,6 +3651,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_complete_task() != 65497) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_connections() != 3574) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_create_branch() != 3235) {

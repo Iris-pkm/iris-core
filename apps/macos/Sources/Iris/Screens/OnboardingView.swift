@@ -64,10 +64,7 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let engine = readyEngine {
-                // The app shell (sidebar + main pane + right panel,
-                // navigation.md §1) doesn't exist yet — this is an honest
-                // placeholder hand-off point, not a faked "done" screen.
-                VaultReadyPlaceholder(engine: engine)
+                AppShell(engine: engine)
             } else {
                 content
             }
@@ -338,29 +335,6 @@ private struct PrimaryButtonStyle: ButtonStyle {
             .frame(height: 36)
             .background(configuration.isPressed ? colors.accentPressed : colors.accentDefault)
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-    }
-}
-
-/// Stand-in for the real app shell (`navigation.md` §1), which doesn't
-/// exist yet. Honest placeholder, not a faked "finished" screen — the next
-/// screen in the build queue is the Node Editor this hands off to.
-private struct VaultReadyPlaceholder: View {
-    let engine: FfiEngine
-    @Environment(\.colorScheme) private var colorScheme
-    private var c: Palette.Colors { Palette.colors(for: colorScheme) }
-
-    var body: some View {
-        VStack(spacing: Space.md) {
-            Text("Vault ready").font(Typography.h1()).foregroundStyle(c.textPrimary)
-            Text(engine.vaultRoot())
-                .font(Typography.bodySmall())
-                .foregroundStyle(c.textSecondary)
-            Text("App shell + Node Editor aren't built yet — this is where onboarding hands off.")
-                .font(Typography.bodySmall())
-                .foregroundStyle(c.textDisabled)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(c.bgCanvas)
     }
 }
 

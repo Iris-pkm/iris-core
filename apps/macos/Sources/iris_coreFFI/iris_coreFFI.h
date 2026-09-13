@@ -313,6 +313,11 @@ void uniffi_iris_core_fn_method_ffiengine_checkout(uint64_t ptr, RustBuffer name
 void uniffi_iris_core_fn_method_ffiengine_complete_task(uint64_t ptr, RustBuffer rel_path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_CONNECTIONS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_CONNECTIONS
+RustBuffer uniffi_iris_core_fn_method_ffiengine_connections(uint64_t ptr, RustBuffer node_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_CREATE_BRANCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_CREATE_BRANCH
 void uniffi_iris_core_fn_method_ffiengine_create_branch(uint64_t ptr, RustBuffer name, RustCallStatus *_Nonnull out_status
@@ -869,6 +874,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_checkout(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_COMPLETE_TASK
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_COMPLETE_TASK
 uint16_t uniffi_iris_core_checksum_method_ffiengine_complete_task(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CONNECTIONS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CONNECTIONS
+uint16_t uniffi_iris_core_checksum_method_ffiengine_connections(void
     
 );
 #endif
