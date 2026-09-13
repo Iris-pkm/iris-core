@@ -431,6 +431,11 @@ impl From<crate::error::IrisError> for FfiEngineError {
 pub struct FfiParsedNode {
     pub node: FfiNode,
     pub body: String,
+    /// The frontmatter exactly as written in the file — Dev Mode's raw view
+    /// (`design/canvas/DevMode.dc.html`) shows this verbatim, not a
+    /// re-serialization of `node`, so it has to be the parser's own
+    /// preserved string rather than derived.
+    pub raw_frontmatter: String,
 }
 
 impl TryFrom<crate::parser::ParsedNode> for FfiParsedNode {
@@ -440,6 +445,7 @@ impl TryFrom<crate::parser::ParsedNode> for FfiParsedNode {
         Ok(FfiParsedNode {
             node: FfiNode::from(&p.node),
             body: p.body,
+            raw_frontmatter: p.raw_frontmatter,
         })
     }
 }
