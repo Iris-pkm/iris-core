@@ -1,11 +1,11 @@
 import SwiftUI
 import IrisCore
 
-/// The Node Editor's right panel default tab (`design/navigation.md` §1) —
-/// real backlinks/relations, not the mockup's static example data. Backed
-/// by `connections.rs` (new this pass — the generic bidirectional relation
-/// lookup, not just the `blocks`/`depends-on` inversion `dependencies.rs`
-/// already had).
+/// The Node Editor's right panel "Connections" tab (`design/navigation.md`
+/// §1, embedded in `RightRail`) — real backlinks/relations, not the
+/// mockup's static example data. Backed by `connections.rs` (new this
+/// pass — the generic bidirectional relation lookup, not just the
+/// `blocks`/`depends-on` inversion `dependencies.rs` already had).
 ///
 /// **Scope, honestly flagged:** the mockup's radial mini-graph is decorative
 /// (a fixed ring/line illustration, not laid out from real connection
@@ -14,6 +14,9 @@ import IrisCore
 /// full graph view than this panel's job). Renders a simplified static
 /// version scaled to the real connection count instead of faking a precise
 /// layout, and the relation list below it is fully real.
+///
+/// Content only — `RightRail` owns the shared width/background/tab row/
+/// outer padding for both this and `DevModeView`.
 struct ConnectionsPanel: View {
     let engine: FfiEngine
     let relPath: String
@@ -25,11 +28,6 @@ struct ConnectionsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
-            HStack {
-                Text("CONNECTIONS").font(Typography.caption()).foregroundStyle(c.textSecondary)
-                Spacer()
-            }
-
             if connections.isEmpty {
                 Text("No connections yet.")
                     .font(Typography.bodySmall())
@@ -58,9 +56,6 @@ struct ConnectionsPanel: View {
 
             Spacer()
         }
-        .padding(Space.lg)
-        .frame(width: 280)
-        .background(c.bgSurface)
         .task(id: relPath) { load() }
     }
 

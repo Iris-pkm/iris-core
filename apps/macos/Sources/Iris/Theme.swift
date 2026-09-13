@@ -118,6 +118,9 @@ enum Typography {
     static func sans(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .custom("Public Sans", size: size, relativeTo: .body).weight(weight)
     }
+    static func mono(_ size: CGFloat) -> Font {
+        .custom("IBM Plex Mono", size: size, relativeTo: .body)
+    }
 
     static func h1() -> Font { serif(24, weight: .semibold) }
     static func bodySans() -> Font { sans(14) }

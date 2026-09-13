@@ -27,7 +27,7 @@ struct AppShell: View {
                     NodeEditorView(engine: engine, relPath: relPath)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     Divider().background(c.borderDefault)
-                    ConnectionsPanel(engine: engine, relPath: relPath)
+                    RightRail(engine: engine, relPath: relPath)
                 }
             } else {
                 emptyState
