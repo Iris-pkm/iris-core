@@ -31,23 +31,39 @@ struct AppShell: View {
     /// an individual item underneath it, which still opens that node
     /// directly via `openNode`. All three selections are mutually exclusive.
     @State private var workbenchCategory: PARAWorkbenchView.Category?
+    @State private var showSearch = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            Sidebar(engine: engine, openNode: $openNode, selectedLens: $selectedLens, workbenchCategory: $workbenchCategory)
-            Divider().background(c.borderDefault)
+        ZStack {
+            HStack(spacing: 0) {
+                Sidebar(
+                    engine: engine,
+                    openNode: $openNode,
+                    selectedLens: $selectedLens,
+                    workbenchCategory: $workbenchCategory,
+                    showSearch: { showSearch = true }
+                )
+                Divider().background(c.borderDefault)
 
-            if let selectedLens {
-                lensView(for: selectedLens)
-            } else if let workbenchCategory {
-                PARAWorkbenchView(engine: engine, initialCategory: workbenchCategory, onOpenNode: { node in
-                    self.workbenchCategory = nil
+                if let selectedLens {
+                    lensView(for: selectedLens)
+                } else if let workbenchCategory {
+                    PARAWorkbenchView(engine: engine, initialCategory: workbenchCategory, onOpenNode: { node in
+                        self.workbenchCategory = nil
+                        openNode = node
+                    })
+                } else if let openNode {
+                    detail(for: openNode)
+                } else {
+                    emptyState
+                }
+            }
+
+            if showSearch {
+                SearchPaletteView(engine: engine, dismiss: { showSearch = false }) { node in
                     openNode = node
-                })
-            } else if let openNode {
-                detail(for: openNode)
-            } else {
-                emptyState
+                    showSearch = false
+                }
             }
         }
         .background(c.bgCanvas)
@@ -123,6 +139,7 @@ private struct Sidebar: View {
     @Binding var openNode: CachedNode?
     @Binding var selectedLens: TaskLens?
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
+    let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -195,16 +212,20 @@ private struct Sidebar: View {
     }
 
     private var searchBar: some View {
-        HStack(spacing: Space.sm) {
-            Image(systemName: "magnifyingglass").foregroundStyle(c.textSecondary).font(.system(size: 11))
-            Text("Search vault…").font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
-            Spacer()
-            Text("⌘K").font(Typography.caption()).foregroundStyle(c.textDisabled)
+        Button(action: showSearch) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "magnifyingglass").foregroundStyle(c.textSecondary).font(.system(size: 11))
+                Text("Search vault…").font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
+                Spacer()
+                Text("⌘K").font(Typography.caption()).foregroundStyle(c.textDisabled)
+            }
+            .padding(Space.sm)
+            .background(c.bgHover)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
         }
-        .padding(Space.sm)
-        .background(c.bgHover)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
+        .buttonStyle(.plain)
+        .keyboardShortcut("k", modifiers: .command)
     }
 
     private func section(title: String, category: PARAWorkbenchView.Category, dotColor: Color, nodes: [CachedNode]) -> some View {
