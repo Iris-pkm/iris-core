@@ -18,24 +18,40 @@ struct ProjectView: View {
     @State private var parsed: FfiParsedNode?
     @State private var environment: ActivationEnvironment?
     @State private var blockerNames: [String: String] = [:]
+    /// "View all" on the Distillation queue card pushes here — a local nav
+    /// state rather than routing through `AppShell`, since this is purely
+    /// a drill-down within the Project's own route (mockup: breadcrumb
+    /// reads "<Project> / Distillation Queue", same window, no shell change).
+    @State private var showDistillationQueue = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if let parsed {
-                    header(for: parsed.node)
+        Group {
+            if showDistillationQueue, let parsed {
+                DistillationQueueView(
+                    engine: engine,
+                    projectId: parsed.node.id,
+                    projectTitle: titleFor(relPath: relPath),
+                    onBack: { showDistillationQueue = false }
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let parsed {
+                            header(for: parsed.node)
 
-                    if parsed.node.projectStatus == .active {
-                        activationBanner
-                        activationGrid
-                        recentlyAdded
-                    } else {
-                        normalLayout(parsed)
+                            if parsed.node.projectStatus == .active {
+                                activationBanner
+                                activationGrid
+                                recentlyAdded
+                            } else {
+                                normalLayout(parsed)
+                            }
+                        }
                     }
                 }
+                .background(c.bgCanvas)
             }
         }
-        .background(c.bgCanvas)
         .id(relPath)
         .task(id: relPath) { load() }
     }
@@ -117,11 +133,16 @@ struct ProjectView: View {
                     rows: environment.recommendedStartingSet.map { .init(text: titleFor($0), tag: priorityTag($0.priority)) },
                     footer: "Startable now — not done, no unmet depends-on. Ordered by priority."
                 )
-                card(
-                    "Distillation queue", count: environment.distillationQueue.count,
-                    rows: environment.distillationQueue.map { .init(text: titleFor($0)) },
-                    footer: "Raw, undistilled notes linked to this project."
-                )
+                Button {
+                    showDistillationQueue = true
+                } label: {
+                    card(
+                        "Distillation queue", count: environment.distillationQueue.count,
+                        rows: environment.distillationQueue.map { .init(text: titleFor($0)) },
+                        footer: "Raw, undistilled notes linked to this project. View all \u{2192}"
+                    )
+                }
+                .buttonStyle(.plain)
                 card(
                     "Blocked tasks", count: environment.blockedTasks.count, countColor: c.danger,
                     rows: environment.blockedTasks.map {
