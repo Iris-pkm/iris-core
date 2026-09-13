@@ -798,6 +798,18 @@ impl FfiEngine {
             &node_id,
         )?)
     }
+
+    // -- connections / backlinks (Node Editor's right panel) --
+
+    pub fn connections(
+        &self,
+        node_id: NodeId,
+    ) -> Result<Vec<crate::connections::Connection>, FfiEngineError> {
+        Ok(crate::connections::connections(
+            self.lock().cache(),
+            &node_id,
+        )?)
+    }
 }
 
 /// The git half of restore-from-backup can't be a constructor (see
@@ -1106,5 +1118,48 @@ mod tests {
         assert_eq!(report.imported, 1);
         assert!(report.skipped.is_empty());
         assert_eq!(engine.inbox().unwrap().len(), 0); // imported as a note, not a task
+    }
+
+    #[test]
+    fn ffi_engine_connections_reflect_relations_both_directions() {
+        let dir = TempDir::new("connections");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let mut project = sample_node();
+        project.node_type = NodeType::Project;
+        project.relations = vec![];
+        engine
+            .create_node(
+                "projects/p.md".to_string(),
+                FfiNode::from(&project),
+                "\n".to_string(),
+            )
+            .unwrap();
+        let project_id = engine
+            .read_node("projects/p.md".to_string())
+            .unwrap()
+            .node
+            .id;
+
+        let mut child = sample_node();
+        child.relations = vec![crate::types::Relation {
+            rel_type: "parent".to_string(),
+            target: project_id.clone(),
+        }];
+        engine
+            .create_node(
+                "notes/child.md".to_string(),
+                FfiNode::from(&child),
+                "\n".to_string(),
+            )
+            .unwrap();
+
+        let conns = engine.connections(project_id).unwrap();
+        assert_eq!(conns.len(), 1);
+        assert_eq!(conns[0].label, "child of");
+        assert_eq!(
+            conns[0].direction,
+            crate::connections::ConnectionDirection::Incoming
+        );
     }
 }
