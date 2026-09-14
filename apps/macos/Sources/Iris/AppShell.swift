@@ -19,13 +19,21 @@ struct AppShell: View {
     /// `ProjectView` vs. everything else to the generic `NodeEditorView`
     /// without a second lookup.
     @State private var openNode: CachedNode?
+    /// The five task-view lenses (`design/navigation.md`'s Inbox/Today/
+    /// Upcoming/Someday-Maybe/Logbook rows) are sibling sidebar
+    /// destinations, not nodes — a separate selection from `openNode`.
+    /// Picking a lens clears `openNode` and vice versa; only one of the
+    /// two ever drives the main content pane at a time.
+    @State private var selectedLens: TaskLens?
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, openNode: $openNode)
+            Sidebar(engine: engine, openNode: $openNode, selectedLens: $selectedLens)
             Divider().background(c.borderDefault)
 
-            if let openNode {
+            if let selectedLens {
+                lensView(for: selectedLens)
+            } else if let openNode {
                 detail(for: openNode)
             } else {
                 emptyState
@@ -33,6 +41,26 @@ struct AppShell: View {
         }
         .background(c.bgCanvas)
         .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+    }
+
+    /// A task row inside any lens opens straight into the Node Editor
+    /// (`navigation.md` §3: "clicking a row in any list view transitions
+    /// ... -> Node Editor") — clears the lens selection so `openNode`
+    /// drives the content pane, matching how a Project/Area/Resource
+    /// sidebar click already behaves.
+    @ViewBuilder
+    private func lensView(for lens: TaskLens) -> some View {
+        let onOpen: (CachedNode) -> Void = { node in
+            selectedLens = nil
+            openNode = node
+        }
+        switch lens {
+        case .inbox: InboxView(engine: engine, onOpenNode: onOpen)
+        case .today: TodayView(engine: engine, onOpenNode: onOpen)
+        case .upcoming: UpcomingView(engine: engine, onOpenNode: onOpen)
+        case .somedayMaybe: SomedayMaybeView(engine: engine, onOpenNode: onOpen)
+        case .logbook: LogbookView(engine: engine, onOpenNode: onOpen)
+        }
     }
 
     /// Projects get `ProjectView` full-width, no right rail — the mockup
@@ -82,12 +110,14 @@ struct AppShell: View {
 private struct Sidebar: View {
     let engine: FfiEngine
     @Binding var openNode: CachedNode?
+    @Binding var selectedLens: TaskLens?
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
     @State private var projects: [CachedNode] = []
     @State private var areas: [CachedNode] = []
     @State private var resources: [CachedNode] = []
+    @State private var lensCounts: [TaskLens: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
@@ -97,6 +127,12 @@ private struct Sidebar: View {
             }
 
             searchBar
+
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(TaskLens.allCases) { lens in
+                    lensRow(lens)
+                }
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
@@ -113,6 +149,31 @@ private struct Sidebar: View {
         .frame(width: 236)
         .background(c.bgSurface)
         .task { reload() }
+    }
+
+    private func lensRow(_ lens: TaskLens) -> some View {
+        let isActive = selectedLens == lens
+        return Button {
+            openNode = nil
+            selectedLens = lens
+        } label: {
+            HStack {
+                Text(lens.title).font(Typography.bodySans()).foregroundStyle(c.textPrimary)
+                Spacer()
+                if let count = lensCounts[lens] {
+                    Text("\(count)").font(Typography.caption()).foregroundStyle(c.textSecondary)
+                }
+            }
+            .padding(Space.sm)
+            .background(isActive ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) {
+                if isActive {
+                    Rectangle().fill(c.accentDefault).frame(width: 2)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }
+        .buttonStyle(.plain)
     }
 
     private var logo: some View {
@@ -153,6 +214,7 @@ private struct Sidebar: View {
     private func sidebarRow(_ node: CachedNode) -> some View {
         let isActive = node.path == openNode?.path
         return Button {
+            selectedLens = nil
             openNode = node
         } label: {
             Text(titleFor(node))
@@ -193,5 +255,16 @@ private struct Sidebar: View {
         projects = (try? engine.search(query: "", nodeType: "project", domain: nil, tag: nil)) ?? []
         areas = (try? engine.search(query: "", nodeType: "area", domain: nil, tag: nil)) ?? []
         resources = (try? engine.search(query: "", nodeType: "resource", domain: nil, tag: nil)) ?? []
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        lensCounts = [
+            .inbox: (try? engine.inbox())?.count ?? 0,
+            .today: (try? engine.today(today: today))?.count ?? 0,
+            .upcoming: (try? engine.upcoming(from: today, days: 7))?.count ?? 0,
+            .somedayMaybe: (try? engine.somedayMaybe())?.count ?? 0,
+            .logbook: (try? engine.logbook())?.count ?? 0,
+        ]
     }
 }
