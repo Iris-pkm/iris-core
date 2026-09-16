@@ -35,6 +35,8 @@ struct AppShell: View {
     @State private var showQuickCapture = false
     @State private var showTrash = false
     @State private var showHistory = false
+    @State private var showSpaces = false
+    @State private var activeSpaceID: String?
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -47,11 +49,14 @@ struct AppShell: View {
                     workbenchCategory: $workbenchCategory,
                     showTrash: $showTrash,
                     showHistory: $showHistory,
+                    showSpaces: $showSpaces,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showHistory {
+                if showSpaces {
+                    SpacesView(engine: engine, activeSpaceID: $activeSpaceID)
+                } else if showHistory {
                     HistoryView(engine: engine)
                 } else if showTrash {
                     TrashView(engine: engine)
@@ -171,6 +176,7 @@ private struct Sidebar: View {
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
     @Binding var showTrash: Bool
     @Binding var showHistory: Bool
+    @Binding var showSpaces: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -206,6 +212,7 @@ private struct Sidebar: View {
 
             trashRow
             historyRow
+            spacesRow
 
             Spacer()
             graphButton
@@ -223,6 +230,7 @@ private struct Sidebar: View {
             workbenchCategory = nil
             showTrash = false
             showHistory = false
+            showSpaces = false
             selectedLens = lens
         } label: {
             HStack {
@@ -273,6 +281,7 @@ private struct Sidebar: View {
                 openNode = nil
                 showTrash = false
                 showHistory = false
+                showSpaces = false
                 workbenchCategory = category
             } label: {
                 HStack(spacing: Space.xs) {
@@ -300,6 +309,7 @@ private struct Sidebar: View {
             workbenchCategory = nil
             showTrash = false
             showHistory = false
+            showSpaces = false
             openNode = node
         } label: {
             Text(titleFor(node))
@@ -343,6 +353,8 @@ private struct Sidebar: View {
             openNode = nil
             showTrash = true
             showHistory = false
+            showSpaces = false
+            showSpaces = false
         } label: {
             HStack(spacing: Space.sm) {
                 Image(systemName: "trash").font(.system(size: 12))
@@ -368,6 +380,7 @@ private struct Sidebar: View {
             openNode = nil
             showTrash = false
             showHistory = true
+            showSpaces = false
         } label: {
             HStack(spacing: Space.sm) {
                 Image(systemName: "clock").font(.system(size: 12))
@@ -380,6 +393,24 @@ private struct Sidebar: View {
             .overlay(alignment: .leading) {
                 if showHistory { Rectangle().fill(c.accentDefault).frame(width: 2) }
             }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var spacesRow: some View {
+        Button {
+            selectedLens = nil; workbenchCategory = nil; openNode = nil
+            showTrash = false; showHistory = false; showSpaces = true
+        } label: {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "square.3.layers.3d").font(.system(size: 12))
+                Text("Spaces").font(Typography.bodySans())
+                Spacer()
+            }
+            .foregroundStyle(showSpaces ? c.accentDefault : c.textPrimary)
+            .padding(Space.sm).background(showSpaces ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) { if showSpaces { Rectangle().fill(c.accentDefault).frame(width: 2) } }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         }
         .buttonStyle(.plain)
