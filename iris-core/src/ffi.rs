@@ -704,6 +704,13 @@ impl FfiEngine {
         Ok(crate::views::inbox(self.lock().cache())?)
     }
 
+    pub fn project_tasks(&self, project_id: NodeId) -> Result<Vec<CachedNode>, FfiEngineError> {
+        Ok(crate::views::project_tasks(
+            self.lock().cache(),
+            &project_id,
+        )?)
+    }
+
     pub fn today(&self, today: String) -> Result<Vec<CachedNode>, FfiEngineError> {
         let today = from_iso_date("today", &today).map_err(ffi_conv_err)?;
         Ok(crate::views::today(self.lock().cache(), today)?)
