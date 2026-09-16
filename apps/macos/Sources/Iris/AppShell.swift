@@ -33,6 +33,7 @@ struct AppShell: View {
     @State private var workbenchCategory: PARAWorkbenchView.Category?
     @State private var showSearch = false
     @State private var showQuickCapture = false
+    @State private var showTrash = false
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -43,11 +44,14 @@ struct AppShell: View {
                     openNode: $openNode,
                     selectedLens: $selectedLens,
                     workbenchCategory: $workbenchCategory,
+                    showTrash: $showTrash,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if let selectedLens {
+                if showTrash {
+                    TrashView(engine: engine)
+                } else if let selectedLens {
                     lensView(for: selectedLens)
                 } else if let workbenchCategory {
                     PARAWorkbenchView(engine: engine, initialCategory: workbenchCategory, onOpenNode: { node in
@@ -161,6 +165,7 @@ private struct Sidebar: View {
     @Binding var openNode: CachedNode?
     @Binding var selectedLens: TaskLens?
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
+    @Binding var showTrash: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -169,6 +174,7 @@ private struct Sidebar: View {
     @State private var areas: [CachedNode] = []
     @State private var resources: [CachedNode] = []
     @State private var lensCounts: [TaskLens: Int] = [:]
+    @State private var trashCount = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
@@ -193,6 +199,8 @@ private struct Sidebar: View {
                 }
             }
 
+            trashRow
+
             Spacer()
             graphButton
         }
@@ -207,6 +215,7 @@ private struct Sidebar: View {
         return Button {
             openNode = nil
             workbenchCategory = nil
+            showTrash = false
             selectedLens = lens
         } label: {
             HStack {
@@ -255,6 +264,7 @@ private struct Sidebar: View {
             Button {
                 selectedLens = nil
                 openNode = nil
+                showTrash = false
                 workbenchCategory = category
             } label: {
                 HStack(spacing: Space.xs) {
@@ -280,6 +290,7 @@ private struct Sidebar: View {
         return Button {
             selectedLens = nil
             workbenchCategory = nil
+            showTrash = false
             openNode = node
         } label: {
             Text(titleFor(node))
@@ -316,10 +327,35 @@ private struct Sidebar: View {
         .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
     }
 
+    private var trashRow: some View {
+        Button {
+            selectedLens = nil
+            workbenchCategory = nil
+            openNode = nil
+            showTrash = true
+        } label: {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "trash").font(.system(size: 12))
+                Text("Trash").font(Typography.bodySans())
+                Spacer()
+                Text("\(trashCount)").font(Typography.caption())
+            }
+            .foregroundStyle(showTrash ? c.accentDefault : c.textPrimary)
+            .padding(Space.sm)
+            .background(showTrash ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) {
+                if showTrash { Rectangle().fill(c.accentDefault).frame(width: 2) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func reload() {
         projects = (try? engine.search(query: "", nodeType: "project", domain: nil, tag: nil)) ?? []
         areas = (try? engine.search(query: "", nodeType: "area", domain: nil, tag: nil)) ?? []
         resources = (try? engine.search(query: "", nodeType: "resource", domain: nil, tag: nil)) ?? []
+        trashCount = (try? engine.trash())?.count ?? 0
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
