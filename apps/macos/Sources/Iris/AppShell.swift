@@ -39,6 +39,7 @@ struct AppShell: View {
     @State private var activeSpaceID: String?
     @State private var showDailyNote = false
     @State private var showReadingList = false
+    @State private var showMusicIdeas = false
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -54,11 +55,14 @@ struct AppShell: View {
                     showSpaces: $showSpaces,
                     showDailyNote: $showDailyNote,
                     showReadingList: $showReadingList,
+                    showMusicIdeas: $showMusicIdeas,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showReadingList {
+                if showMusicIdeas {
+                    MusicIdeasView(engine: engine)
+                } else if showReadingList {
                     ReadingListView(engine: engine)
                 } else if showDailyNote {
                     DailyNoteView(engine: engine)
@@ -187,6 +191,7 @@ private struct Sidebar: View {
     @Binding var showSpaces: Bool
     @Binding var showDailyNote: Bool
     @Binding var showReadingList: Bool
+    @Binding var showMusicIdeas: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -207,6 +212,7 @@ private struct Sidebar: View {
             searchBar
             dailyNoteRow
             readingListRow
+            musicIdeasRow
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(TaskLens.allCases) { lens in
@@ -316,6 +322,17 @@ private struct Sidebar: View {
                 .padding(Space.sm).background(showReadingList ? c.bgSelected : Color.clear)
                 .overlay(alignment: .leading) { if showReadingList { Rectangle().fill(c.accentDefault).frame(width: 2) } }
                 .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }.buttonStyle(.plain)
+    }
+
+    private var musicIdeasRow: some View {
+        Button {
+            selectedLens = nil; workbenchCategory = nil; openNode = nil
+            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = false; showMusicIdeas = true
+        } label: {
+            HStack(spacing: Space.sm) { Image(systemName: "music.note").font(.system(size: 12)); Text("Music Ideas").font(Typography.bodySans()); Spacer() }
+                .foregroundStyle(showMusicIdeas ? c.accentDefault : c.textPrimary).padding(Space.sm).background(showMusicIdeas ? c.bgSelected : Color.clear)
+                .overlay(alignment: .leading) { if showMusicIdeas { Rectangle().fill(c.accentDefault).frame(width: 2) } }.clipShape(RoundedRectangle(cornerRadius: Radius.md))
         }.buttonStyle(.plain)
     }
 
