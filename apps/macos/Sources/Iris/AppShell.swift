@@ -134,6 +134,7 @@ struct AppShell: View {
         case .upcoming: UpcomingView(engine: engine, onOpenNode: onOpen)
         case .somedayMaybe: SomedayMaybeView(engine: engine, onOpenNode: onOpen)
         case .logbook: LogbookView(engine: engine, onOpenNode: onOpen)
+        case .reminders: RemindersView(engine: engine)
         }
     }
 
@@ -256,6 +257,9 @@ private struct Sidebar: View {
             showTrash = false
             showHistory = false
             showSpaces = false
+            showDailyNote = false
+            showReadingList = false
+            showMusicIdeas = false
             selectedLens = lens
         } label: {
             HStack {
@@ -503,6 +507,7 @@ private struct Sidebar: View {
             .upcoming: (try? engine.upcoming(from: today, days: 7))?.count ?? 0,
             .somedayMaybe: (try? engine.somedayMaybe())?.count ?? 0,
             .logbook: (try? engine.logbook())?.count ?? 0,
+            .reminders: (try? engine.search(query: "", nodeType: "reminder", domain: nil, tag: nil))?.count ?? 0,
         ]
     }
 }

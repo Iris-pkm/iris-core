@@ -9,7 +9,7 @@ import IrisCore
 /// (`CachedNode.parentProject` is only an id; every lens's right rail
 /// needs the human name for its "By project" breakdown).
 enum TaskLens: String, CaseIterable, Identifiable {
-    case inbox, today, upcoming, somedayMaybe, logbook
+    case inbox, today, upcoming, somedayMaybe, logbook, reminders
     var id: String { rawValue }
 
     var title: String {
@@ -19,6 +19,7 @@ enum TaskLens: String, CaseIterable, Identifiable {
         case .upcoming: return "Upcoming"
         case .somedayMaybe: return "Someday/Maybe"
         case .logbook: return "Logbook"
+        case .reminders: return "Reminders"
         }
     }
 }
