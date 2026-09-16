@@ -81,6 +81,16 @@ pub fn logbook(cache: &Cache) -> IrisResult<Vec<CachedNode>> {
     )
 }
 
+/// Every non-deleted node created during the given UTC calendar day, oldest
+/// first. Daily Note renders this as a derived capture timeline; it never
+/// copies captured content into the note's own markdown body.
+pub fn daily_captures(cache: &Cache, day: NaiveDate) -> IrisResult<Vec<CachedNode>> {
+    cache.query_nodes(
+        "SELECT * FROM nodes WHERE deleted_at IS NULL AND substr(created, 1, 10) = ?1 ORDER BY created, id",
+        [day.to_string()],
+    )
+}
+
 /// Trash: every soft-deleted node, any type (ARCHITECTURE.md §5 Data Integrity
 /// & Recovery), most-recently-deleted first. Unlike the task views above this
 /// isn't scoped to `node_type = 'task'` — Trash holds anything the user deleted.
@@ -263,6 +273,55 @@ Body.
             .map(|n| n.id)
             .collect();
         assert!(!ids.contains(&"01JQZ8OVERDUEDONE0000000A".to_string()));
+    }
+
+    #[test]
+    fn daily_captures_uses_created_day_and_excludes_trash() {
+        let dir = TempDir::new("daily-captures");
+        let vault = Vault::create(dir.path()).unwrap();
+        for (path, id, kind, created, deleted) in [
+            (
+                "notes/morning.md",
+                "01JQZ8MORNING000000000000A",
+                "note",
+                "2026-01-15T08:00:00Z",
+                "",
+            ),
+            (
+                "tasks/afternoon.md",
+                "01JQZ8AFTERNOON00000000000B",
+                "task",
+                "2026-01-15T16:00:00Z",
+                "",
+            ),
+            (
+                "notes/other-day.md",
+                "01JQZ8OTHERDAY00000000000C",
+                "note",
+                "2026-01-16T00:00:00Z",
+                "",
+            ),
+            (
+                "notes/trashed.md",
+                "01JQZ8TRASHED00000000000D",
+                "note",
+                "2026-01-15T12:00:00Z",
+                "deleted_at: 2026-01-15T13:00:00Z",
+            ),
+        ] {
+            vault.write_node(path, &format!("---\nid: {id}\ntype: {kind}\ncreated: {created}\nmodified: {created}\nschema_version: 1\n{deleted}\n---\n\nBody.\n")).unwrap();
+        }
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+        let ids: Vec<_> = daily_captures(&cache, jan15())
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["01JQZ8MORNING000000000000A", "01JQZ8AFTERNOON00000000000B"]
+        );
     }
 
     #[test]

@@ -746,6 +746,11 @@ impl FfiEngine {
         Ok(crate::views::logbook(self.lock().cache())?)
     }
 
+    pub fn daily_captures(&self, day: String) -> Result<Vec<CachedNode>, FfiEngineError> {
+        let day = from_iso_date("day", &day).map_err(ffi_conv_err)?;
+        Ok(crate::views::daily_captures(self.lock().cache(), day)?)
+    }
+
     pub fn trash(&self) -> Result<Vec<CachedNode>, FfiEngineError> {
         Ok(crate::views::trash(self.lock().cache())?)
     }
