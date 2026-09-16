@@ -23,6 +23,20 @@ pub fn inbox(cache: &Cache) -> IrisResult<Vec<CachedNode>> {
     )
 }
 
+/// Every task belonging to `project_id` — the Project Tasks screen
+/// (`screens/tasks.png`), project-scoped rather than one of the five
+/// global lenses above. Returns both top-level tasks and subtasks
+/// (nested via the `parent` relation, SCHEMA_SPEC §5's "Epic→Story→Subtask
+/// nesting") flat, ordered by id; building the two-level hierarchy from
+/// each task's `parent` relation is a UI-layer concern, the same reasoning
+/// `distillation.rs` already applies to its own ordering.
+pub fn project_tasks(cache: &Cache, project_id: &str) -> IrisResult<Vec<CachedNode>> {
+    cache.query_nodes(
+        &format!("SELECT * FROM nodes WHERE {TASK_BASE} AND parent_project = ?1 ORDER BY id"),
+        [project_id],
+    )
+}
+
 /// Tasks scheduled for `today`, plus overdue tasks not yet done.
 pub fn today(cache: &Cache, today: NaiveDate) -> IrisResult<Vec<CachedNode>> {
     let today = today.to_string();
@@ -199,6 +213,18 @@ Body.
         let ids: Vec<_> = inbox(&cache).unwrap().into_iter().map(|n| n.id).collect();
         assert!(ids.contains(&"01JQZ8INBOX0000000000000A".to_string()));
         assert!(!ids.contains(&"01JQZ8PROJ00000000000000B".to_string()));
+    }
+
+    #[test]
+    fn project_tasks_scopes_to_one_project() {
+        let dir = TempDir::new("project-tasks");
+        let cache = setup(dir.path());
+        let ids: Vec<_> = project_tasks(&cache, "01JQZ8PROJECTID0000000000AB")
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        assert_eq!(ids, vec!["01JQZ8PROJ00000000000000B".to_string()]);
     }
 
     #[test]
