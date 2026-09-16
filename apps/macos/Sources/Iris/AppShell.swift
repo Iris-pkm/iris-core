@@ -25,14 +25,25 @@ struct AppShell: View {
     /// Picking a lens clears `openNode` and vice versa; only one of the
     /// two ever drives the main content pane at a time.
     @State private var selectedLens: TaskLens?
+    /// The PARA workbench (`design/canvas/PARAWorkbench.dc.html`) is a
+    /// third sibling selection, entered by clicking a sidebar section
+    /// *header* ("Projects"/"Areas"/"Resources") — distinct from clicking
+    /// an individual item underneath it, which still opens that node
+    /// directly via `openNode`. All three selections are mutually exclusive.
+    @State private var workbenchCategory: PARAWorkbenchView.Category?
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, openNode: $openNode, selectedLens: $selectedLens)
+            Sidebar(engine: engine, openNode: $openNode, selectedLens: $selectedLens, workbenchCategory: $workbenchCategory)
             Divider().background(c.borderDefault)
 
             if let selectedLens {
                 lensView(for: selectedLens)
+            } else if let workbenchCategory {
+                PARAWorkbenchView(engine: engine, initialCategory: workbenchCategory, onOpenNode: { node in
+                    self.workbenchCategory = nil
+                    openNode = node
+                })
             } else if let openNode {
                 detail(for: openNode)
             } else {
@@ -111,6 +122,7 @@ private struct Sidebar: View {
     let engine: FfiEngine
     @Binding var openNode: CachedNode?
     @Binding var selectedLens: TaskLens?
+    @Binding var workbenchCategory: PARAWorkbenchView.Category?
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -136,9 +148,9 @@ private struct Sidebar: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
-                    section(title: "Projects", dotColor: c.warning, nodes: projects)
-                    section(title: "Areas", dotColor: c.success, nodes: areas)
-                    section(title: "Resources", dotColor: c.accentDefault, nodes: resources)
+                    section(title: "Projects", category: .projects, dotColor: c.warning, nodes: projects)
+                    section(title: "Areas", category: .areas, dotColor: c.success, nodes: areas)
+                    section(title: "Resources", category: .resources, dotColor: c.accentDefault, nodes: resources)
                 }
             }
 
@@ -155,6 +167,7 @@ private struct Sidebar: View {
         let isActive = selectedLens == lens
         return Button {
             openNode = nil
+            workbenchCategory = nil
             selectedLens = lens
         } label: {
             HStack {
@@ -194,13 +207,21 @@ private struct Sidebar: View {
         .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
     }
 
-    private func section(title: String, dotColor: Color, nodes: [CachedNode]) -> some View {
+    private func section(title: String, category: PARAWorkbenchView.Category, dotColor: Color, nodes: [CachedNode]) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: Space.xs) {
-                Circle().fill(dotColor).frame(width: 6, height: 6)
-                Text(title.uppercased()).font(Typography.caption()).foregroundStyle(c.textSecondary)
+            Button {
+                selectedLens = nil
+                openNode = nil
+                workbenchCategory = category
+            } label: {
+                HStack(spacing: Space.xs) {
+                    Circle().fill(dotColor).frame(width: 6, height: 6)
+                    Text(title.uppercased()).font(Typography.caption()).foregroundStyle(c.textSecondary)
+                }
+                .padding(.bottom, Space.xs)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.bottom, Space.xs)
+            .buttonStyle(.plain)
 
             if nodes.isEmpty {
                 Text("None yet").font(Typography.bodySmall()).foregroundStyle(c.textDisabled).padding(Space.sm)
@@ -215,6 +236,7 @@ private struct Sidebar: View {
         let isActive = node.path == openNode?.path
         return Button {
             selectedLens = nil
+            workbenchCategory = nil
             openNode = node
         } label: {
             Text(titleFor(node))
