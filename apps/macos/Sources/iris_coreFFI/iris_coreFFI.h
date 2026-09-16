@@ -338,6 +338,11 @@ void uniffi_iris_core_fn_method_ffiengine_create_node(uint64_t ptr, RustBuffer r
 RustBuffer uniffi_iris_core_fn_method_ffiengine_current_branch(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_DAILY_CAPTURES
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_DAILY_CAPTURES
+RustBuffer uniffi_iris_core_fn_method_ffiengine_daily_captures(uint64_t ptr, RustBuffer day, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_DELETE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_DELETE_NODE
 void uniffi_iris_core_fn_method_ffiengine_delete_node(uint64_t ptr, RustBuffer rel_path, RustCallStatus *_Nonnull out_status
@@ -909,6 +914,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_create_node(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CURRENT_BRANCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CURRENT_BRANCH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_current_branch(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DAILY_CAPTURES
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DAILY_CAPTURES
+uint16_t uniffi_iris_core_checksum_method_ffiengine_daily_captures(void
     
 );
 #endif

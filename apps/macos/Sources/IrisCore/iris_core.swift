@@ -532,6 +532,8 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     
     func currentBranch() throws  -> String?
     
+    func dailyCaptures(day: String) throws  -> [CachedNode]
+    
     func deleteNode(relPath: String) throws 
     
     func dependedOnBy(nodeId: String) throws  -> [CachedNode]
@@ -798,6 +800,15 @@ open func currentBranch()throws  -> String?  {
     return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_current_branch(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func dailyCaptures(day: String)throws  -> [CachedNode]  {
+    return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_daily_captures(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(day),$0
     )
 })
 }
@@ -3693,6 +3704,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_current_branch() != 10307) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_daily_captures() != 26476) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_delete_node() != 3854) {
