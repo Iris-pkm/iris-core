@@ -1,0 +1,52 @@
+import SwiftUI
+import IrisCore
+
+/// Resource-domain aggregate over actual `reading-item` nodes.
+struct ReadingListView: View {
+    let engine: FfiEngine
+    @Environment(\.colorScheme) private var colorScheme
+    private var c: Palette.Colors { Palette.colors(for: colorScheme) }
+    @State private var items: [(CachedNode, FfiNode)] = []
+    @State private var filter = "All"
+    private let filters = ["All", "Unread", "Reading", "Read"]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: Space.lg) {
+                Text("Reading List").font(Typography.h1()).foregroundStyle(c.textPrimary)
+                Text("\(shown.count) item\(shown.count == 1 ? "" : "s")").font(Typography.bodySans()).foregroundStyle(c.textSecondary)
+                HStack(spacing: Space.sm) { ForEach(filters, id: \.self) { chip($0) } }
+                ForEach(shown, id: \.0.id) { item in row(item) }
+                Spacer()
+            }
+            .padding(EdgeInsets(top: Space.xxl, leading: Space.xxxl, bottom: Space.xl, trailing: Space.xxxl))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Divider().background(c.borderDefault)
+            rail
+        }.background(c.bgCanvas).task { load() }
+    }
+    private var shown: [(CachedNode, FfiNode)] { filter == "All" ? items : items.filter { ($0.1.readStatus ?? "Unread").capitalized == filter } }
+    private func chip(_ name: String) -> some View { Button(name) { filter = name }.buttonStyle(.plain).font(Typography.caption()).foregroundStyle(filter == name ? c.accentDefault : c.textSecondary).padding(.horizontal, Space.md).padding(.vertical, Space.xs).background(filter == name ? c.bgSelected : c.bgHover).clipShape(Capsule()) }
+    private func row(_ item: (CachedNode, FfiNode)) -> some View {
+        HStack(spacing: Space.md) {
+            Image(systemName: item.1.sourceUrl == nil ? "book" : "doc.text").foregroundStyle(c.textSecondary).frame(width: 14)
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title(item.0)).font(Typography.bodySans()).foregroundStyle(c.textPrimary)
+                Text(item.1.sourceUrl ?? "Internal note").font(Typography.mono(11)).foregroundStyle(c.textSecondary)
+            }; Spacer(); status(item.1.readStatus ?? "Unread")
+        }.padding(.vertical, Space.sm)
+    }
+    private var rail: some View {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            Text("UP NEXT").font(Typography.caption()).foregroundStyle(c.textSecondary)
+            ForEach(Array(items.filter { ($0.1.readStatus ?? "unread").lowercased() != "read" }.prefix(3)), id: \.0.id) { Text(title($0.0)).font(Typography.bodySmall()).foregroundStyle(c.textPrimary) }
+            Divider().background(c.borderDefault)
+            Text("STATUS").font(Typography.caption()).foregroundStyle(c.textSecondary)
+            ForEach(["Unread", "Reading", "Read"], id: \.self) { name in HStack { Text(name).font(Typography.bodySmall()).foregroundStyle(c.textPrimary); Spacer(); Text("\(items.filter { ($0.1.readStatus ?? "Unread").capitalized == name }.count)").font(Typography.bodySmall()).foregroundStyle(c.textSecondary) } }
+            Spacer()
+        }.padding(Space.lg).frame(width: 260).background(c.bgSurface)
+    }
+    private func status(_ value: String) -> some View { Text(value.capitalized).font(Typography.caption()).foregroundStyle(c.textSecondary).padding(.horizontal, Space.sm).padding(.vertical, Space.xxs).background(c.bgHover).clipShape(Capsule()) }
+    private func title(_ node: CachedNode) -> String { (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+    private func load() { let nodes = (try? engine.search(query: "", nodeType: "reading-item", domain: nil, tag: nil)) ?? []; items = nodes.compactMap { n in (try? engine.readNode(relPath: n.path)).map { (n, $0.node) } } }
+}

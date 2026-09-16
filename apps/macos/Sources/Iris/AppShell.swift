@@ -38,6 +38,7 @@ struct AppShell: View {
     @State private var showSpaces = false
     @State private var activeSpaceID: String?
     @State private var showDailyNote = false
+    @State private var showReadingList = false
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -52,11 +53,14 @@ struct AppShell: View {
                     showHistory: $showHistory,
                     showSpaces: $showSpaces,
                     showDailyNote: $showDailyNote,
+                    showReadingList: $showReadingList,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showDailyNote {
+                if showReadingList {
+                    ReadingListView(engine: engine)
+                } else if showDailyNote {
                     DailyNoteView(engine: engine)
                 } else if showSpaces {
                     SpacesView(engine: engine, activeSpaceID: $activeSpaceID)
@@ -182,6 +186,7 @@ private struct Sidebar: View {
     @Binding var showHistory: Bool
     @Binding var showSpaces: Bool
     @Binding var showDailyNote: Bool
+    @Binding var showReadingList: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -201,6 +206,7 @@ private struct Sidebar: View {
 
             searchBar
             dailyNoteRow
+            readingListRow
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(TaskLens.allCases) { lens in
@@ -294,6 +300,22 @@ private struct Sidebar: View {
             .padding(Space.sm).background(showDailyNote ? c.bgSelected : Color.clear)
             .overlay(alignment: .leading) { if showDailyNote { Rectangle().fill(c.accentDefault).frame(width: 2) } }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }.buttonStyle(.plain)
+    }
+
+    private var readingListRow: some View {
+        Button {
+            selectedLens = nil; workbenchCategory = nil; openNode = nil
+            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = true
+        } label: {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "books.vertical").font(.system(size: 12))
+                Text("Reading List").font(Typography.bodySans())
+                Spacer()
+            }.foregroundStyle(showReadingList ? c.accentDefault : c.textPrimary)
+                .padding(Space.sm).background(showReadingList ? c.bgSelected : Color.clear)
+                .overlay(alignment: .leading) { if showReadingList { Rectangle().fill(c.accentDefault).frame(width: 2) } }
+                .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         }.buttonStyle(.plain)
     }
 
