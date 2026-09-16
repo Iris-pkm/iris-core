@@ -564,6 +564,8 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     
     func logbook() throws  -> [CachedNode]
     
+    func projectTasks(projectId: String) throws  -> [CachedNode]
+    
     func purgeExpiredTrashDays(days: UInt32) throws  -> UInt32
     
     func purgeExpiredTrashDefault() throws  -> UInt32
@@ -906,6 +908,15 @@ open func logbook()throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_logbook(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func projectTasks(projectId: String)throws  -> [CachedNode]  {
+    return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_project_tasks(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),$0
     )
 })
 }
@@ -3718,6 +3729,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_logbook() != 31546) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_project_tasks() != 47314) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_purge_expired_trash_days() != 29004) {
