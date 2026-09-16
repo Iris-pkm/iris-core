@@ -72,7 +72,7 @@ struct AppShell: View {
     @ViewBuilder
     private func detail(for node: CachedNode) -> some View {
         if node.nodeType == "project" {
-            ProjectView(engine: engine, relPath: node.path)
+            ProjectView(engine: engine, relPath: node.path, onOpenNode: { openNode = $0 })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             HStack(spacing: 0) {

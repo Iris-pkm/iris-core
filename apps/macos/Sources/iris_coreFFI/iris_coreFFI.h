@@ -398,6 +398,11 @@ void uniffi_iris_core_fn_method_ffiengine_log_pomodoro(uint64_t ptr, RustBuffer 
 RustBuffer uniffi_iris_core_fn_method_ffiengine_logbook(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_PROJECT_TASKS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_PROJECT_TASKS
+RustBuffer uniffi_iris_core_fn_method_ffiengine_project_tasks(uint64_t ptr, RustBuffer project_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DAYS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DAYS
 uint32_t uniffi_iris_core_fn_method_ffiengine_purge_expired_trash_days(uint64_t ptr, uint32_t days, RustCallStatus *_Nonnull out_status
@@ -976,6 +981,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_log_pomodoro(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOGBOOK
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOGBOOK
 uint16_t uniffi_iris_core_checksum_method_ffiengine_logbook(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PROJECT_TASKS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PROJECT_TASKS
+uint16_t uniffi_iris_core_checksum_method_ffiengine_project_tasks(void
     
 );
 #endif

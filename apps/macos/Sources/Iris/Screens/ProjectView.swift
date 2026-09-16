@@ -11,6 +11,7 @@ import IrisCore
 struct ProjectView: View {
     let engine: FfiEngine
     let relPath: String
+    let onOpenNode: (CachedNode) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -23,6 +24,9 @@ struct ProjectView: View {
     /// a drill-down within the Project's own route (mockup: breadcrumb
     /// reads "<Project> / Distillation Queue", same window, no shell change).
     @State private var showDistillationQueue = false
+    /// The header's "Tasks" link pushes here — same local-nav pattern
+    /// (`design/canvas/Tasks.dc.html`'s breadcrumb: "<Project> / Tasks").
+    @State private var showTasks = false
 
     var body: some View {
         Group {
@@ -32,6 +36,14 @@ struct ProjectView: View {
                     projectId: parsed.node.id,
                     projectTitle: titleFor(relPath: relPath),
                     onBack: { showDistillationQueue = false }
+                )
+            } else if showTasks, let parsed {
+                ProjectTasksView(
+                    engine: engine,
+                    projectId: parsed.node.id,
+                    projectTitle: titleFor(relPath: relPath),
+                    onBack: { showTasks = false },
+                    onOpenTask: onOpenNode
                 )
             } else {
                 ScrollView {
@@ -69,6 +81,13 @@ struct ProjectView: View {
                     .background(c.bgHover)
                     .clipShape(Capsule())
                     .foregroundStyle(c.textSecondary)
+                Spacer()
+                Button {
+                    showTasks = true
+                } label: {
+                    Text("Tasks \u{2192}").font(Typography.bodySmall()).foregroundStyle(c.accentDefault)
+                }
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: Space.md) {
