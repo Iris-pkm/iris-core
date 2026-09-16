@@ -34,6 +34,7 @@ struct AppShell: View {
     @State private var showSearch = false
     @State private var showQuickCapture = false
     @State private var showTrash = false
+    @State private var showHistory = false
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -45,11 +46,14 @@ struct AppShell: View {
                     selectedLens: $selectedLens,
                     workbenchCategory: $workbenchCategory,
                     showTrash: $showTrash,
+                    showHistory: $showHistory,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showTrash {
+                if showHistory {
+                    HistoryView(engine: engine)
+                } else if showTrash {
                     TrashView(engine: engine)
                 } else if let selectedLens {
                     lensView(for: selectedLens)
@@ -166,6 +170,7 @@ private struct Sidebar: View {
     @Binding var selectedLens: TaskLens?
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
     @Binding var showTrash: Bool
+    @Binding var showHistory: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -200,6 +205,7 @@ private struct Sidebar: View {
             }
 
             trashRow
+            historyRow
 
             Spacer()
             graphButton
@@ -216,6 +222,7 @@ private struct Sidebar: View {
             openNode = nil
             workbenchCategory = nil
             showTrash = false
+            showHistory = false
             selectedLens = lens
         } label: {
             HStack {
@@ -265,6 +272,7 @@ private struct Sidebar: View {
                 selectedLens = nil
                 openNode = nil
                 showTrash = false
+                showHistory = false
                 workbenchCategory = category
             } label: {
                 HStack(spacing: Space.xs) {
@@ -291,6 +299,7 @@ private struct Sidebar: View {
             selectedLens = nil
             workbenchCategory = nil
             showTrash = false
+            showHistory = false
             openNode = node
         } label: {
             Text(titleFor(node))
@@ -333,6 +342,7 @@ private struct Sidebar: View {
             workbenchCategory = nil
             openNode = nil
             showTrash = true
+            showHistory = false
         } label: {
             HStack(spacing: Space.sm) {
                 Image(systemName: "trash").font(.system(size: 12))
@@ -345,6 +355,30 @@ private struct Sidebar: View {
             .background(showTrash ? c.bgSelected : Color.clear)
             .overlay(alignment: .leading) {
                 if showTrash { Rectangle().fill(c.accentDefault).frame(width: 2) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var historyRow: some View {
+        Button {
+            selectedLens = nil
+            workbenchCategory = nil
+            openNode = nil
+            showTrash = false
+            showHistory = true
+        } label: {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "clock").font(.system(size: 12))
+                Text("History").font(Typography.bodySans())
+                Spacer()
+            }
+            .foregroundStyle(showHistory ? c.accentDefault : c.textPrimary)
+            .padding(Space.sm)
+            .background(showHistory ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) {
+                if showHistory { Rectangle().fill(c.accentDefault).frame(width: 2) }
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         }
