@@ -148,6 +148,9 @@ struct AppShell: View {
         if node.nodeType == "project" {
             ProjectView(engine: engine, relPath: node.path, onOpenNode: { openNode = $0 })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if node.nodeType == "area" && nodeTitle(node).caseInsensitiveCompare("Trading") == .orderedSame {
+            TradingJournalView(engine: engine)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             HStack(spacing: 0) {
                 NodeEditorView(engine: engine, relPath: node.path)
@@ -166,6 +169,10 @@ struct AppShell: View {
                 .foregroundStyle(c.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func nodeTitle(_ node: CachedNode) -> String {
+        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
     }
 }
 
@@ -372,6 +379,9 @@ private struct Sidebar: View {
             showTrash = false
             showHistory = false
             showSpaces = false
+            showDailyNote = false
+            showReadingList = false
+            showMusicIdeas = false
             openNode = node
         } label: {
             Text(titleFor(node))

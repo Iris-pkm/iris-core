@@ -352,7 +352,7 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
+// Initial value and increment amount for handles.
 // These ensure that SWIFT handles always have the lowest bit set
 fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
 fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
@@ -435,6 +435,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    public static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -501,109 +517,109 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 public protocol FfiEngineProtocol: AnyObject, Sendable {
-    
+
     func activationEnvironment(projectId: String) throws  -> ActivationEnvironment
-    
-    func addComment(targetRelPath: String, textFragment: String, commentRelPath: String, body: String) throws 
-    
+
+    func addComment(targetRelPath: String, textFragment: String, commentRelPath: String, body: String) throws
+
     func blockedBy(nodeId: String) throws  -> [CachedNode]
-    
+
     func blockedByIncoming(nodeId: String) throws  -> [CachedNode]
-    
+
     func blocks(nodeId: String) throws  -> [CachedNode]
-    
+
     func canRedo()  -> Bool
-    
+
     func canUndo()  -> Bool
-    
+
     func checkIntegrity() throws  -> IntegrityReport
-    
-    func checkout(name: String) throws 
-    
-    func completeTask(relPath: String) throws 
-    
+
+    func checkout(name: String) throws
+
+    func completeTask(relPath: String) throws
+
     func connections(nodeId: String) throws  -> [Connection]
-    
-    func createBranch(name: String) throws 
-    
-    func createCheckpoint(name: String) throws 
-    
-    func createNode(relPath: String, node: FfiNode, body: String) throws 
-    
+
+    func createBranch(name: String) throws
+
+    func createCheckpoint(name: String) throws
+
+    func createNode(relPath: String, node: FfiNode, body: String) throws
+
     func currentBranch() throws  -> String?
-    
+
     func dailyCaptures(day: String) throws  -> [CachedNode]
-    
-    func deleteNode(relPath: String) throws 
-    
+
+    func deleteNode(relPath: String) throws
+
     func dependedOnBy(nodeId: String) throws  -> [CachedNode]
-    
+
     func distillationQueue(projectId: String) throws  -> [CachedNode]
-    
+
     /**
      * Import every `.md` file under `source` as a plain note. No link
      * resolution — see `import_obsidian_vault` for wikilink support.
      */
     func importMarkdownFolder(source: String) throws  -> FfiImportReport
-    
+
     /**
      * Same as `import_markdown_folder`, plus resolving `[[wikilinks]]` into
      * `related-to` relations.
      */
     func importObsidianVault(source: String) throws  -> FfiImportReport
-    
+
     func inbox() throws  -> [CachedNode]
-    
-    func instantiateTemplate(templateRelPath: String, newRelPath: String) throws 
-    
+
+    func instantiateTemplate(templateRelPath: String, newRelPath: String) throws
+
     func isBlocked(nodeId: String) throws  -> Bool
-    
+
     func listBranches() throws  -> [String]
-    
+
     func listCheckpoints() throws  -> [String]
-    
-    func logPomodoro(relPath: String) throws 
-    
+
+    func logPomodoro(relPath: String) throws
+
     func logbook() throws  -> [CachedNode]
-    
+
     func projectTasks(projectId: String) throws  -> [CachedNode]
-    
+
     func purgeExpiredTrashDays(days: UInt32) throws  -> UInt32
-    
+
     func purgeExpiredTrashDefault() throws  -> UInt32
-    
+
     func readNode(relPath: String) throws  -> FfiParsedNode
-    
-    func rebuildCache() throws 
-    
+
+    func rebuildCache() throws
+
     func redo() throws  -> Bool
-    
-    func replyToAnnotation(parentRelPath: String, replyRelPath: String, body: String) throws 
-    
-    func restoreNode(relPath: String) throws 
-    
+
+    func replyToAnnotation(parentRelPath: String, replyRelPath: String, body: String) throws
+
+    func restoreNode(relPath: String) throws
+
     func search(query: String, nodeType: String?, domain: String?, tag: String?) throws  -> [CachedNode]
-    
-    func setAnnotationResolved(relPath: String, resolved: Bool) throws 
-    
-    func setDistillationLevel(relPath: String, level: DistillationLevel) throws 
-    
+
+    func setAnnotationResolved(relPath: String, resolved: Bool) throws
+
+    func setDistillationLevel(relPath: String, level: DistillationLevel) throws
+
     func setProjectStatus(relPath: String, status: ProjectStatus) throws  -> Bool
-    
+
     func somedayMaybe() throws  -> [CachedNode]
-    
+
     func today(today: String) throws  -> [CachedNode]
-    
+
     func trash() throws  -> [CachedNode]
-    
+
     func undo() throws  -> Bool
-    
+
     func upcoming(from: String, days: UInt32) throws  -> [CachedNode]
-    
-    func updateNode(relPath: String, node: FfiNode) throws 
-    
+
+    func updateNode(relPath: String, node: FfiNode) throws
+
     func vaultRoot()  -> String
-    
+
 }
 open class FfiEngine: FfiEngineProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -655,7 +671,7 @@ open class FfiEngine: FfiEngineProtocol, @unchecked Sendable {
         try! rustCall { uniffi_iris_core_fn_free_ffiengine(handle, $0) }
     }
 
-    
+
 public static func `init`(path: String)throws  -> FfiEngine  {
     return try  FfiConverterTypeFfiEngine_lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_constructor_ffiengine_init(
@@ -663,7 +679,7 @@ public static func `init`(path: String)throws  -> FfiEngine  {
     )
 })
 }
-    
+
 public static func `open`(path: String)throws  -> FfiEngine  {
     return try  FfiConverterTypeFfiEngine_lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_constructor_ffiengine_open(
@@ -671,9 +687,9 @@ public static func `open`(path: String)throws  -> FfiEngine  {
     )
 })
 }
-    
 
-    
+
+
 open func activationEnvironment(projectId: String)throws  -> ActivationEnvironment  {
     return try  FfiConverterTypeActivationEnvironment_lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_activation_environment(
@@ -682,7 +698,7 @@ open func activationEnvironment(projectId: String)throws  -> ActivationEnvironme
     )
 })
 }
-    
+
 open func addComment(targetRelPath: String, textFragment: String, commentRelPath: String, body: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_add_comment(
             self.uniffiCloneHandle(),
@@ -693,7 +709,7 @@ open func addComment(targetRelPath: String, textFragment: String, commentRelPath
     )
 }
 }
-    
+
 open func blockedBy(nodeId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_blocked_by(
@@ -702,7 +718,7 @@ open func blockedBy(nodeId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func blockedByIncoming(nodeId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_blocked_by_incoming(
@@ -711,7 +727,7 @@ open func blockedByIncoming(nodeId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func blocks(nodeId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_blocks(
@@ -720,7 +736,7 @@ open func blocks(nodeId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func canRedo() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_iris_core_fn_method_ffiengine_can_redo(
@@ -728,7 +744,7 @@ open func canRedo() -> Bool  {
     )
 })
 }
-    
+
 open func canUndo() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_iris_core_fn_method_ffiengine_can_undo(
@@ -736,7 +752,7 @@ open func canUndo() -> Bool  {
     )
 })
 }
-    
+
 open func checkIntegrity()throws  -> IntegrityReport  {
     return try  FfiConverterTypeIntegrityReport_lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_check_integrity(
@@ -744,7 +760,7 @@ open func checkIntegrity()throws  -> IntegrityReport  {
     )
 })
 }
-    
+
 open func checkout(name: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_checkout(
             self.uniffiCloneHandle(),
@@ -752,7 +768,7 @@ open func checkout(name: String)throws   {try rustCallWithError(FfiConverterType
     )
 }
 }
-    
+
 open func completeTask(relPath: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_complete_task(
             self.uniffiCloneHandle(),
@@ -760,7 +776,7 @@ open func completeTask(relPath: String)throws   {try rustCallWithError(FfiConver
     )
 }
 }
-    
+
 open func connections(nodeId: String)throws  -> [Connection]  {
     return try  FfiConverterSequenceTypeConnection.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_connections(
@@ -769,7 +785,7 @@ open func connections(nodeId: String)throws  -> [Connection]  {
     )
 })
 }
-    
+
 open func createBranch(name: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_create_branch(
             self.uniffiCloneHandle(),
@@ -777,7 +793,7 @@ open func createBranch(name: String)throws   {try rustCallWithError(FfiConverter
     )
 }
 }
-    
+
 open func createCheckpoint(name: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_create_checkpoint(
             self.uniffiCloneHandle(),
@@ -785,7 +801,7 @@ open func createCheckpoint(name: String)throws   {try rustCallWithError(FfiConve
     )
 }
 }
-    
+
 open func createNode(relPath: String, node: FfiNode, body: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_create_node(
             self.uniffiCloneHandle(),
@@ -795,7 +811,7 @@ open func createNode(relPath: String, node: FfiNode, body: String)throws   {try 
     )
 }
 }
-    
+
 open func currentBranch()throws  -> String?  {
     return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_current_branch(
@@ -803,7 +819,7 @@ open func currentBranch()throws  -> String?  {
     )
 })
 }
-    
+
 open func dailyCaptures(day: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_daily_captures(
@@ -812,7 +828,7 @@ open func dailyCaptures(day: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func deleteNode(relPath: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_delete_node(
             self.uniffiCloneHandle(),
@@ -820,7 +836,7 @@ open func deleteNode(relPath: String)throws   {try rustCallWithError(FfiConverte
     )
 }
 }
-    
+
 open func dependedOnBy(nodeId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_depended_on_by(
@@ -829,7 +845,7 @@ open func dependedOnBy(nodeId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func distillationQueue(projectId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_distillation_queue(
@@ -838,7 +854,7 @@ open func distillationQueue(projectId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
     /**
      * Import every `.md` file under `source` as a plain note. No link
      * resolution — see `import_obsidian_vault` for wikilink support.
@@ -851,7 +867,7 @@ open func importMarkdownFolder(source: String)throws  -> FfiImportReport  {
     )
 })
 }
-    
+
     /**
      * Same as `import_markdown_folder`, plus resolving `[[wikilinks]]` into
      * `related-to` relations.
@@ -864,7 +880,7 @@ open func importObsidianVault(source: String)throws  -> FfiImportReport  {
     )
 })
 }
-    
+
 open func inbox()throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_inbox(
@@ -872,7 +888,7 @@ open func inbox()throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func instantiateTemplate(templateRelPath: String, newRelPath: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_instantiate_template(
             self.uniffiCloneHandle(),
@@ -881,7 +897,7 @@ open func instantiateTemplate(templateRelPath: String, newRelPath: String)throws
     )
 }
 }
-    
+
 open func isBlocked(nodeId: String)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_is_blocked(
@@ -890,7 +906,7 @@ open func isBlocked(nodeId: String)throws  -> Bool  {
     )
 })
 }
-    
+
 open func listBranches()throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_list_branches(
@@ -898,7 +914,7 @@ open func listBranches()throws  -> [String]  {
     )
 })
 }
-    
+
 open func listCheckpoints()throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_list_checkpoints(
@@ -906,7 +922,7 @@ open func listCheckpoints()throws  -> [String]  {
     )
 })
 }
-    
+
 open func logPomodoro(relPath: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_log_pomodoro(
             self.uniffiCloneHandle(),
@@ -914,7 +930,7 @@ open func logPomodoro(relPath: String)throws   {try rustCallWithError(FfiConvert
     )
 }
 }
-    
+
 open func logbook()throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_logbook(
@@ -922,7 +938,7 @@ open func logbook()throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func projectTasks(projectId: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_project_tasks(
@@ -931,7 +947,7 @@ open func projectTasks(projectId: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func purgeExpiredTrashDays(days: UInt32)throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_purge_expired_trash_days(
@@ -940,7 +956,7 @@ open func purgeExpiredTrashDays(days: UInt32)throws  -> UInt32  {
     )
 })
 }
-    
+
 open func purgeExpiredTrashDefault()throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_purge_expired_trash_default(
@@ -948,7 +964,7 @@ open func purgeExpiredTrashDefault()throws  -> UInt32  {
     )
 })
 }
-    
+
 open func readNode(relPath: String)throws  -> FfiParsedNode  {
     return try  FfiConverterTypeFfiParsedNode_lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_read_node(
@@ -957,14 +973,14 @@ open func readNode(relPath: String)throws  -> FfiParsedNode  {
     )
 })
 }
-    
+
 open func rebuildCache()throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_rebuild_cache(
             self.uniffiCloneHandle(),$0
     )
 }
 }
-    
+
 open func redo()throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_redo(
@@ -972,7 +988,7 @@ open func redo()throws  -> Bool  {
     )
 })
 }
-    
+
 open func replyToAnnotation(parentRelPath: String, replyRelPath: String, body: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_reply_to_annotation(
             self.uniffiCloneHandle(),
@@ -982,7 +998,7 @@ open func replyToAnnotation(parentRelPath: String, replyRelPath: String, body: S
     )
 }
 }
-    
+
 open func restoreNode(relPath: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_restore_node(
             self.uniffiCloneHandle(),
@@ -990,7 +1006,7 @@ open func restoreNode(relPath: String)throws   {try rustCallWithError(FfiConvert
     )
 }
 }
-    
+
 open func search(query: String, nodeType: String?, domain: String?, tag: String?)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_search(
@@ -1002,7 +1018,7 @@ open func search(query: String, nodeType: String?, domain: String?, tag: String?
     )
 })
 }
-    
+
 open func setAnnotationResolved(relPath: String, resolved: Bool)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_set_annotation_resolved(
             self.uniffiCloneHandle(),
@@ -1011,7 +1027,7 @@ open func setAnnotationResolved(relPath: String, resolved: Bool)throws   {try ru
     )
 }
 }
-    
+
 open func setDistillationLevel(relPath: String, level: DistillationLevel)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_set_distillation_level(
             self.uniffiCloneHandle(),
@@ -1020,7 +1036,7 @@ open func setDistillationLevel(relPath: String, level: DistillationLevel)throws 
     )
 }
 }
-    
+
 open func setProjectStatus(relPath: String, status: ProjectStatus)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_set_project_status(
@@ -1030,7 +1046,7 @@ open func setProjectStatus(relPath: String, status: ProjectStatus)throws  -> Boo
     )
 })
 }
-    
+
 open func somedayMaybe()throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_someday_maybe(
@@ -1038,7 +1054,7 @@ open func somedayMaybe()throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func today(today: String)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_today(
@@ -1047,7 +1063,7 @@ open func today(today: String)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func trash()throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_trash(
@@ -1055,7 +1071,7 @@ open func trash()throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func undo()throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_undo(
@@ -1063,7 +1079,7 @@ open func undo()throws  -> Bool  {
     )
 })
 }
-    
+
 open func upcoming(from: String, days: UInt32)throws  -> [CachedNode]  {
     return try  FfiConverterSequenceTypeCachedNode.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_upcoming(
@@ -1073,7 +1089,7 @@ open func upcoming(from: String, days: UInt32)throws  -> [CachedNode]  {
     )
 })
 }
-    
+
 open func updateNode(relPath: String, node: FfiNode)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
     uniffi_iris_core_fn_method_ffiengine_update_node(
             self.uniffiCloneHandle(),
@@ -1082,7 +1098,7 @@ open func updateNode(relPath: String, node: FfiNode)throws   {try rustCallWithEr
     )
 }
 }
-    
+
 open func vaultRoot() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_iris_core_fn_method_ffiengine_vault_root(
@@ -1090,9 +1106,9 @@ open func vaultRoot() -> String  {
     )
 })
 }
-    
 
-    
+
+
 }
 
 
@@ -1163,9 +1179,9 @@ public struct ActivationEnvironment: Equatable, Hashable {
         self.recommendedStartingSet = recommendedStartingSet
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1179,12 +1195,12 @@ public struct FfiConverterTypeActivationEnvironment: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ActivationEnvironment {
         return
             try ActivationEnvironment(
-                distillationQueue: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
-                unresolvedDecisions: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
-                blockedTasks: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
-                relatedResources: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
-                upcomingEvents: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
-                recentlyAdded: FfiConverterSequenceTypeCachedNode.read(from: &buf), 
+                distillationQueue: FfiConverterSequenceTypeCachedNode.read(from: &buf),
+                unresolvedDecisions: FfiConverterSequenceTypeCachedNode.read(from: &buf),
+                blockedTasks: FfiConverterSequenceTypeCachedNode.read(from: &buf),
+                relatedResources: FfiConverterSequenceTypeCachedNode.read(from: &buf),
+                upcomingEvents: FfiConverterSequenceTypeCachedNode.read(from: &buf),
+                recentlyAdded: FfiConverterSequenceTypeCachedNode.read(from: &buf),
                 recommendedStartingSet: FfiConverterSequenceTypeCachedNode.read(from: &buf)
         )
     }
@@ -1269,29 +1285,29 @@ public struct CachedNode: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, nodeType: String, path: String, 
+    public init(id: String, nodeType: String, path: String,
         /**
          * RFC3339, always present (`Node::created` is required). Powers
          * recency ordering (e.g. guided activation's "recently-added material").
-         */created: String, status: String?, priority: String?, scheduledDate: String?, dueDate: String?, deletedAt: String?, hasProject: Bool, 
+         */created: String, status: String?, priority: String?, scheduledDate: String?, dueDate: String?, deletedAt: String?, hasProject: Bool,
         /**
          * The target id of this node's `parent_project` relation, if any — the
          * project a note/task belongs to (SCHEMA_SPEC §5). Powers per-project
          * queries like the distillation queue (`distillation.rs`); `has_project`
          * stays as a cheap boolean for callers that only need presence.
-         */parentProject: String?, 
+         */parentProject: String?,
         /**
          * `raw` / `bolded` / `highlighted` / `summarized`, or `None` if unset
          * (treated as not-yet-distilled — SCHEMA_SPEC's `distillation_level`).
-         */distillationLevel: String?, 
+         */distillationLevel: String?,
         /**
          * RFC3339 `event.start`, if this is an `event` node with one set.
          * Powers guided activation's "upcoming calendar constraints".
-         */eventStart: String?, 
+         */eventStart: String?,
         /**
          * `annotation.resolved` — powers guided activation's "unresolved
          * decisions" (an open, unresolved comment). Meaningless for other types.
-         */resolved: Bool, domain: String?, 
+         */resolved: Bool, domain: String?,
         /**
          * Comma-joined tags (SQLite has no array type). See `search.rs` for how
          * tag filtering matches against this.
@@ -1316,9 +1332,9 @@ public struct CachedNode: Equatable, Hashable {
         self.isTemplate = isTemplate
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1332,23 +1348,23 @@ public struct FfiConverterTypeCachedNode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CachedNode {
         return
             try CachedNode(
-                id: FfiConverterString.read(from: &buf), 
-                nodeType: FfiConverterString.read(from: &buf), 
-                path: FfiConverterString.read(from: &buf), 
-                created: FfiConverterString.read(from: &buf), 
-                status: FfiConverterOptionString.read(from: &buf), 
-                priority: FfiConverterOptionString.read(from: &buf), 
-                scheduledDate: FfiConverterOptionString.read(from: &buf), 
-                dueDate: FfiConverterOptionString.read(from: &buf), 
-                deletedAt: FfiConverterOptionString.read(from: &buf), 
-                hasProject: FfiConverterBool.read(from: &buf), 
-                parentProject: FfiConverterOptionString.read(from: &buf), 
-                distillationLevel: FfiConverterOptionString.read(from: &buf), 
-                eventStart: FfiConverterOptionString.read(from: &buf), 
-                resolved: FfiConverterBool.read(from: &buf), 
-                domain: FfiConverterOptionString.read(from: &buf), 
-                tags: FfiConverterString.read(from: &buf), 
-                body: FfiConverterString.read(from: &buf), 
+                id: FfiConverterString.read(from: &buf),
+                nodeType: FfiConverterString.read(from: &buf),
+                path: FfiConverterString.read(from: &buf),
+                created: FfiConverterString.read(from: &buf),
+                status: FfiConverterOptionString.read(from: &buf),
+                priority: FfiConverterOptionString.read(from: &buf),
+                scheduledDate: FfiConverterOptionString.read(from: &buf),
+                dueDate: FfiConverterOptionString.read(from: &buf),
+                deletedAt: FfiConverterOptionString.read(from: &buf),
+                hasProject: FfiConverterBool.read(from: &buf),
+                parentProject: FfiConverterOptionString.read(from: &buf),
+                distillationLevel: FfiConverterOptionString.read(from: &buf),
+                eventStart: FfiConverterOptionString.read(from: &buf),
+                resolved: FfiConverterBool.read(from: &buf),
+                domain: FfiConverterOptionString.read(from: &buf),
+                tags: FfiConverterString.read(from: &buf),
+                body: FfiConverterString.read(from: &buf),
                 isTemplate: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1402,9 +1418,9 @@ public struct ChecklistItem: Equatable, Hashable {
         self.done = done
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1418,7 +1434,7 @@ public struct FfiConverterTypeChecklistItem: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChecklistItem {
         return
             try ChecklistItem(
-                text: FfiConverterString.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf),
                 done: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1460,9 +1476,9 @@ public struct Connection: Equatable, Hashable {
         self.label = label
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1476,9 +1492,9 @@ public struct FfiConverterTypeConnection: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Connection {
         return
             try Connection(
-                node: FfiConverterTypeCachedNode.read(from: &buf), 
-                relType: FfiConverterString.read(from: &buf), 
-                direction: FfiConverterTypeConnectionDirection.read(from: &buf), 
+                node: FfiConverterTypeCachedNode.read(from: &buf),
+                relType: FfiConverterString.read(from: &buf),
+                direction: FfiConverterTypeConnectionDirection.read(from: &buf),
                 label: FfiConverterString.read(from: &buf)
         )
     }
@@ -1523,9 +1539,9 @@ public struct DanglingRelation: Equatable, Hashable {
         self.targetId = targetId
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1539,8 +1555,8 @@ public struct FfiConverterTypeDanglingRelation: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DanglingRelation {
         return
             try DanglingRelation(
-                sourceId: FfiConverterString.read(from: &buf), 
-                relType: FfiConverterString.read(from: &buf), 
+                sourceId: FfiConverterString.read(from: &buf),
+                relType: FfiConverterString.read(from: &buf),
                 targetId: FfiConverterString.read(from: &buf)
         )
     }
@@ -1583,9 +1599,9 @@ public struct FfiAnnotationAnchor: Equatable, Hashable {
         self.crdtPositionYaml = crdtPositionYaml
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1599,7 +1615,7 @@ public struct FfiConverterTypeFfiAnnotationAnchor: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiAnnotationAnchor {
         return
             try FfiAnnotationAnchor(
-                textFragment: FfiConverterOptionString.read(from: &buf), 
+                textFragment: FfiConverterOptionString.read(from: &buf),
                 crdtPositionYaml: FfiConverterOptionString.read(from: &buf)
         )
     }
@@ -1642,9 +1658,9 @@ public struct FfiImportReport: Equatable, Hashable {
         self.skipped = skipped
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1658,7 +1674,7 @@ public struct FfiConverterTypeFfiImportReport: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiImportReport {
         return
             try FfiImportReport(
-                imported: FfiConverterUInt32.read(from: &buf), 
+                imported: FfiConverterUInt32.read(from: &buf),
                 skipped: FfiConverterSequenceTypeFfiSkippedImport.read(from: &buf)
         )
     }
@@ -1732,10 +1748,15 @@ public struct FfiNode: Equatable, Hashable {
     public var theme: String?
     public var inkAttachment: String?
     public var date: String?
+    public var symbol: String?
+    public var entry: Double?
+    public var exit: Double?
+    public var pnl: Double?
+    public var rMultiple: Double?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, nodeType: NodeType, created: String, modified: String, schemaVersion: UInt32, lifecycle: Lifecycle?, archivedAt: String?, domain: String?, tags: [String], relations: [Relation], deletedAt: String?, isTemplate: Bool, distillationLevel: DistillationLevel?, status: String?, priority: Priority?, scheduledDate: String?, dueDate: String?, estimatedPomodoros: UInt32?, actualPomodoros: UInt32?, recurrence: FfiRecurrence?, recurrenceOccurrences: UInt32?, checklist: [ChecklistItem], start: String?, end: String?, externalId: String?, projectStatus: ProjectStatus?, startDate: String?, targetDate: String?, sourceUrl: String?, readStatus: String?, reminderText: String?, fireAt: String?, reminderStatus: String?, resolved: Bool, anchor: FfiAnnotationAnchor?, pinned: [String], activeFilter: String?, defaultView: String?, theme: String?, inkAttachment: String?, date: String?) {
+    public init(id: String, nodeType: NodeType, created: String, modified: String, schemaVersion: UInt32, lifecycle: Lifecycle?, archivedAt: String?, domain: String?, tags: [String], relations: [Relation], deletedAt: String?, isTemplate: Bool, distillationLevel: DistillationLevel?, status: String?, priority: Priority?, scheduledDate: String?, dueDate: String?, estimatedPomodoros: UInt32?, actualPomodoros: UInt32?, recurrence: FfiRecurrence?, recurrenceOccurrences: UInt32?, checklist: [ChecklistItem], start: String?, end: String?, externalId: String?, projectStatus: ProjectStatus?, startDate: String?, targetDate: String?, sourceUrl: String?, readStatus: String?, reminderText: String?, fireAt: String?, reminderStatus: String?, resolved: Bool, anchor: FfiAnnotationAnchor?, pinned: [String], activeFilter: String?, defaultView: String?, theme: String?, inkAttachment: String?, date: String?, symbol: String?, entry: Double?, exit: Double?, pnl: Double?, rMultiple: Double?) {
         self.id = id
         self.nodeType = nodeType
         self.created = created
@@ -1777,11 +1798,16 @@ public struct FfiNode: Equatable, Hashable {
         self.theme = theme
         self.inkAttachment = inkAttachment
         self.date = date
+        self.symbol = symbol
+        self.entry = entry
+        self.exit = exit
+        self.pnl = pnl
+        self.rMultiple = rMultiple
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1795,47 +1821,52 @@ public struct FfiConverterTypeFfiNode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiNode {
         return
             try FfiNode(
-                id: FfiConverterString.read(from: &buf), 
-                nodeType: FfiConverterTypeNodeType.read(from: &buf), 
-                created: FfiConverterString.read(from: &buf), 
-                modified: FfiConverterString.read(from: &buf), 
-                schemaVersion: FfiConverterUInt32.read(from: &buf), 
-                lifecycle: FfiConverterOptionTypeLifecycle.read(from: &buf), 
-                archivedAt: FfiConverterOptionString.read(from: &buf), 
-                domain: FfiConverterOptionString.read(from: &buf), 
-                tags: FfiConverterSequenceString.read(from: &buf), 
-                relations: FfiConverterSequenceTypeRelation.read(from: &buf), 
-                deletedAt: FfiConverterOptionString.read(from: &buf), 
-                isTemplate: FfiConverterBool.read(from: &buf), 
-                distillationLevel: FfiConverterOptionTypeDistillationLevel.read(from: &buf), 
-                status: FfiConverterOptionString.read(from: &buf), 
-                priority: FfiConverterOptionTypePriority.read(from: &buf), 
-                scheduledDate: FfiConverterOptionString.read(from: &buf), 
-                dueDate: FfiConverterOptionString.read(from: &buf), 
-                estimatedPomodoros: FfiConverterOptionUInt32.read(from: &buf), 
-                actualPomodoros: FfiConverterOptionUInt32.read(from: &buf), 
-                recurrence: FfiConverterOptionTypeFfiRecurrence.read(from: &buf), 
-                recurrenceOccurrences: FfiConverterOptionUInt32.read(from: &buf), 
-                checklist: FfiConverterSequenceTypeChecklistItem.read(from: &buf), 
-                start: FfiConverterOptionString.read(from: &buf), 
-                end: FfiConverterOptionString.read(from: &buf), 
-                externalId: FfiConverterOptionString.read(from: &buf), 
-                projectStatus: FfiConverterOptionTypeProjectStatus.read(from: &buf), 
-                startDate: FfiConverterOptionString.read(from: &buf), 
-                targetDate: FfiConverterOptionString.read(from: &buf), 
-                sourceUrl: FfiConverterOptionString.read(from: &buf), 
-                readStatus: FfiConverterOptionString.read(from: &buf), 
-                reminderText: FfiConverterOptionString.read(from: &buf), 
-                fireAt: FfiConverterOptionString.read(from: &buf), 
-                reminderStatus: FfiConverterOptionString.read(from: &buf), 
-                resolved: FfiConverterBool.read(from: &buf), 
-                anchor: FfiConverterOptionTypeFfiAnnotationAnchor.read(from: &buf), 
-                pinned: FfiConverterSequenceString.read(from: &buf), 
-                activeFilter: FfiConverterOptionString.read(from: &buf), 
-                defaultView: FfiConverterOptionString.read(from: &buf), 
-                theme: FfiConverterOptionString.read(from: &buf), 
-                inkAttachment: FfiConverterOptionString.read(from: &buf), 
-                date: FfiConverterOptionString.read(from: &buf)
+                id: FfiConverterString.read(from: &buf),
+                nodeType: FfiConverterTypeNodeType.read(from: &buf),
+                created: FfiConverterString.read(from: &buf),
+                modified: FfiConverterString.read(from: &buf),
+                schemaVersion: FfiConverterUInt32.read(from: &buf),
+                lifecycle: FfiConverterOptionTypeLifecycle.read(from: &buf),
+                archivedAt: FfiConverterOptionString.read(from: &buf),
+                domain: FfiConverterOptionString.read(from: &buf),
+                tags: FfiConverterSequenceString.read(from: &buf),
+                relations: FfiConverterSequenceTypeRelation.read(from: &buf),
+                deletedAt: FfiConverterOptionString.read(from: &buf),
+                isTemplate: FfiConverterBool.read(from: &buf),
+                distillationLevel: FfiConverterOptionTypeDistillationLevel.read(from: &buf),
+                status: FfiConverterOptionString.read(from: &buf),
+                priority: FfiConverterOptionTypePriority.read(from: &buf),
+                scheduledDate: FfiConverterOptionString.read(from: &buf),
+                dueDate: FfiConverterOptionString.read(from: &buf),
+                estimatedPomodoros: FfiConverterOptionUInt32.read(from: &buf),
+                actualPomodoros: FfiConverterOptionUInt32.read(from: &buf),
+                recurrence: FfiConverterOptionTypeFfiRecurrence.read(from: &buf),
+                recurrenceOccurrences: FfiConverterOptionUInt32.read(from: &buf),
+                checklist: FfiConverterSequenceTypeChecklistItem.read(from: &buf),
+                start: FfiConverterOptionString.read(from: &buf),
+                end: FfiConverterOptionString.read(from: &buf),
+                externalId: FfiConverterOptionString.read(from: &buf),
+                projectStatus: FfiConverterOptionTypeProjectStatus.read(from: &buf),
+                startDate: FfiConverterOptionString.read(from: &buf),
+                targetDate: FfiConverterOptionString.read(from: &buf),
+                sourceUrl: FfiConverterOptionString.read(from: &buf),
+                readStatus: FfiConverterOptionString.read(from: &buf),
+                reminderText: FfiConverterOptionString.read(from: &buf),
+                fireAt: FfiConverterOptionString.read(from: &buf),
+                reminderStatus: FfiConverterOptionString.read(from: &buf),
+                resolved: FfiConverterBool.read(from: &buf),
+                anchor: FfiConverterOptionTypeFfiAnnotationAnchor.read(from: &buf),
+                pinned: FfiConverterSequenceString.read(from: &buf),
+                activeFilter: FfiConverterOptionString.read(from: &buf),
+                defaultView: FfiConverterOptionString.read(from: &buf),
+                theme: FfiConverterOptionString.read(from: &buf),
+                inkAttachment: FfiConverterOptionString.read(from: &buf),
+                date: FfiConverterOptionString.read(from: &buf),
+                symbol: FfiConverterOptionString.read(from: &buf),
+                entry: FfiConverterOptionDouble.read(from: &buf),
+                exit: FfiConverterOptionDouble.read(from: &buf),
+                pnl: FfiConverterOptionDouble.read(from: &buf),
+                rMultiple: FfiConverterOptionDouble.read(from: &buf)
         )
     }
 
@@ -1881,6 +1912,11 @@ public struct FfiConverterTypeFfiNode: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.theme, into: &buf)
         FfiConverterOptionString.write(value.inkAttachment, into: &buf)
         FfiConverterOptionString.write(value.date, into: &buf)
+        FfiConverterOptionString.write(value.symbol, into: &buf)
+        FfiConverterOptionDouble.write(value.entry, into: &buf)
+        FfiConverterOptionDouble.write(value.exit, into: &buf)
+        FfiConverterOptionDouble.write(value.pnl, into: &buf)
+        FfiConverterOptionDouble.write(value.rMultiple, into: &buf)
     }
 }
 
@@ -1917,7 +1953,7 @@ public struct FfiParsedNode: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(node: FfiNode, body: String, 
+    public init(node: FfiNode, body: String,
         /**
          * The frontmatter exactly as written in the file — Dev Mode's raw view
          * (`design/canvas/DevMode.dc.html`) shows this verbatim, not a
@@ -1929,9 +1965,9 @@ public struct FfiParsedNode: Equatable, Hashable {
         self.rawFrontmatter = rawFrontmatter
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1945,8 +1981,8 @@ public struct FfiConverterTypeFfiParsedNode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiParsedNode {
         return
             try FfiParsedNode(
-                node: FfiConverterTypeFfiNode.read(from: &buf), 
-                body: FfiConverterString.read(from: &buf), 
+                node: FfiConverterTypeFfiNode.read(from: &buf),
+                body: FfiConverterString.read(from: &buf),
                 rawFrontmatter: FfiConverterString.read(from: &buf)
         )
     }
@@ -1990,9 +2026,9 @@ public struct FfiRestoreResult {
         self.report = report
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2006,7 +2042,7 @@ public struct FfiConverterTypeFfiRestoreResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiRestoreResult {
         return
             try FfiRestoreResult(
-                engine: FfiConverterTypeFfiEngine.read(from: &buf), 
+                engine: FfiConverterTypeFfiEngine.read(from: &buf),
                 report: FfiConverterTypeIntegrityReport.read(from: &buf)
         )
     }
@@ -2044,9 +2080,9 @@ public struct FfiSkippedImport: Equatable, Hashable {
         self.reason = reason
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2060,7 +2096,7 @@ public struct FfiConverterTypeFfiSkippedImport: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiSkippedImport {
         return
             try FfiSkippedImport(
-                path: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf),
                 reason: FfiConverterString.read(from: &buf)
         )
     }
@@ -2100,9 +2136,9 @@ public struct IntegrityReport: Equatable, Hashable {
         self.orphanedAnnotations = orphanedAnnotations
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2116,8 +2152,8 @@ public struct FfiConverterTypeIntegrityReport: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IntegrityReport {
         return
             try IntegrityReport(
-                malformedFiles: FfiConverterSequenceTypeMalformedFile.read(from: &buf), 
-                danglingRelations: FfiConverterSequenceTypeDanglingRelation.read(from: &buf), 
+                malformedFiles: FfiConverterSequenceTypeMalformedFile.read(from: &buf),
+                danglingRelations: FfiConverterSequenceTypeDanglingRelation.read(from: &buf),
                 orphanedAnnotations: FfiConverterSequenceTypeOrphanedAnnotation.read(from: &buf)
         )
     }
@@ -2159,9 +2195,9 @@ public struct MalformedFile: Equatable, Hashable {
         self.error = error
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2175,7 +2211,7 @@ public struct FfiConverterTypeMalformedFile: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MalformedFile {
         return
             try MalformedFile(
-                path: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf),
                 error: FfiConverterString.read(from: &buf)
         )
     }
@@ -2221,9 +2257,9 @@ public struct OrphanedAnnotation: Equatable, Hashable {
         self.reason = reason
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2237,7 +2273,7 @@ public struct FfiConverterTypeOrphanedAnnotation: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OrphanedAnnotation {
         return
             try OrphanedAnnotation(
-                annotationId: FfiConverterString.read(from: &buf), 
+                annotationId: FfiConverterString.read(from: &buf),
                 reason: FfiConverterString.read(from: &buf)
         )
     }
@@ -2275,9 +2311,9 @@ public struct Relation: Equatable, Hashable {
         self.target = target
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2291,7 +2327,7 @@ public struct FfiConverterTypeRelation: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Relation {
         return
             try Relation(
-                relType: FfiConverterString.read(from: &buf), 
+                relType: FfiConverterString.read(from: &buf),
                 target: FfiConverterString.read(from: &buf)
         )
     }
@@ -2321,7 +2357,7 @@ public func FfiConverterTypeRelation_lower(_ value: Relation) -> RustBuffer {
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ConnectionDirection: Equatable, Hashable {
-    
+
     /**
      * This node's own relation, pointing at `node`.
      */
@@ -2350,26 +2386,26 @@ public struct FfiConverterTypeConnectionDirection: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConnectionDirection {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .outgoing
-        
+
         case 2: return .incoming
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: ConnectionDirection, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .outgoing:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .incoming:
             writeInt(&buf, Int32(2))
-        
+
         }
     }
 }
@@ -2394,7 +2430,7 @@ public func FfiConverterTypeConnectionDirection_lower(_ value: ConnectionDirecti
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum DistillationLevel: Equatable, Hashable {
-    
+
     case raw
     case bolded
     case highlighted
@@ -2419,38 +2455,38 @@ public struct FfiConverterTypeDistillationLevel: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DistillationLevel {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .raw
-        
+
         case 2: return .bolded
-        
+
         case 3: return .highlighted
-        
+
         case 4: return .summarized
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: DistillationLevel, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .raw:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .bolded:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .highlighted:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .summarized:
             writeInt(&buf, Int32(4))
-        
+
         }
     }
 }
@@ -2477,8 +2513,8 @@ public func FfiConverterTypeDistillationLevel_lower(_ value: DistillationLevel) 
  */
 public enum FfiConversionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-    
-    
+
+
     case InvalidTimestamp(field: String, value: String
     )
     case InvalidDate(field: String, value: String
@@ -2486,15 +2522,15 @@ public enum FfiConversionError: Swift.Error, Equatable, Hashable, Foundation.Loc
     case InvalidYaml(String
     )
 
-    
 
-    
 
-    
+
+
+
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
+
 }
 
 #if compiler(>=6)
@@ -2511,15 +2547,15 @@ public struct FfiConverterTypeFfiConversionError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        
 
-        
+
+
         case 1: return .InvalidTimestamp(
-            field: try FfiConverterString.read(from: &buf), 
+            field: try FfiConverterString.read(from: &buf),
             value: try FfiConverterString.read(from: &buf)
             )
         case 2: return .InvalidDate(
-            field: try FfiConverterString.read(from: &buf), 
+            field: try FfiConverterString.read(from: &buf),
             value: try FfiConverterString.read(from: &buf)
             )
         case 3: return .InvalidYaml(
@@ -2533,26 +2569,26 @@ public struct FfiConverterTypeFfiConversionError: FfiConverterRustBuffer {
     public static func write(_ value: FfiConversionError, into buf: inout [UInt8]) {
         switch value {
 
-        
 
-        
-        
+
+
+
         case let .InvalidTimestamp(field,value):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(field, into: &buf)
             FfiConverterString.write(value, into: &buf)
-            
-        
+
+
         case let .InvalidDate(field,value):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(field, into: &buf)
             FfiConverterString.write(value, into: &buf)
-            
-        
+
+
         case let .InvalidYaml(v1):
             writeInt(&buf, Int32(3))
             FfiConverterString.write(v1, into: &buf)
-            
+
         }
     }
 }
@@ -2580,20 +2616,20 @@ public func FfiConverterTypeFfiConversionError_lower(_ value: FfiConversionError
  */
 public enum FfiEngineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-    
-    
+
+
     case Failed(String
     )
 
-    
 
-    
 
-    
+
+
+
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
+
 }
 
 #if compiler(>=6)
@@ -2610,9 +2646,9 @@ public struct FfiConverterTypeFfiEngineError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        
 
-        
+
+
         case 1: return .Failed(
             try FfiConverterString.read(from: &buf)
             )
@@ -2624,14 +2660,14 @@ public struct FfiConverterTypeFfiEngineError: FfiConverterRustBuffer {
     public static func write(_ value: FfiEngineError, into buf: inout [UInt8]) {
         switch value {
 
-        
 
-        
-        
+
+
+
         case let .Failed(v1):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(v1, into: &buf)
-            
+
         }
     }
 }
@@ -2659,7 +2695,7 @@ public func FfiConverterTypeFfiEngineError_lower(_ value: FfiEngineError) -> Rus
  */
 
 public enum FfiRecurrence: Equatable, Hashable {
-    
+
     case fixed(interval: String, until: String?, count: UInt32?
     )
     case flexible(interval: String, until: String?, count: UInt32?
@@ -2686,43 +2722,43 @@ public struct FfiConverterTypeFfiRecurrence: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiRecurrence {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .fixed(interval: try FfiConverterString.read(from: &buf), until: try FfiConverterOptionString.read(from: &buf), count: try FfiConverterOptionUInt32.read(from: &buf)
         )
-        
+
         case 2: return .flexible(interval: try FfiConverterString.read(from: &buf), until: try FfiConverterOptionString.read(from: &buf), count: try FfiConverterOptionUInt32.read(from: &buf)
         )
-        
+
         case 3: return .rrule(rrule: try FfiConverterString.read(from: &buf), dtstart: try FfiConverterString.read(from: &buf)
         )
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: FfiRecurrence, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case let .fixed(interval,until,count):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(interval, into: &buf)
             FfiConverterOptionString.write(until, into: &buf)
             FfiConverterOptionUInt32.write(count, into: &buf)
-            
-        
+
+
         case let .flexible(interval,until,count):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(interval, into: &buf)
             FfiConverterOptionString.write(until, into: &buf)
             FfiConverterOptionUInt32.write(count, into: &buf)
-            
-        
+
+
         case let .rrule(rrule,dtstart):
             writeInt(&buf, Int32(3))
             FfiConverterString.write(rrule, into: &buf)
             FfiConverterString.write(dtstart, into: &buf)
-            
+
         }
     }
 }
@@ -2747,7 +2783,7 @@ public func FfiConverterTypeFfiRecurrence_lower(_ value: FfiRecurrence) -> RustB
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum Lifecycle: Equatable, Hashable {
-    
+
     case active
     case archived
 
@@ -2770,26 +2806,26 @@ public struct FfiConverterTypeLifecycle: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Lifecycle {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .active
-        
+
         case 2: return .archived
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: Lifecycle, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .active:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .archived:
             writeInt(&buf, Int32(2))
-        
+
         }
     }
 }
@@ -2814,7 +2850,7 @@ public func FfiConverterTypeLifecycle_lower(_ value: Lifecycle) -> RustBuffer {
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum NodeType: Equatable, Hashable {
-    
+
     case note
     case task
     case event
@@ -2851,106 +2887,106 @@ public struct FfiConverterTypeNodeType: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NodeType {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .note
-        
+
         case 2: return .task
-        
+
         case 3: return .event
-        
+
         case 4: return .project
-        
+
         case 5: return .area
-        
+
         case 6: return .resource
-        
+
         case 7: return .space
-        
+
         case 8: return .annotation
-        
+
         case 9: return .inkNote
-        
+
         case 10: return .reminder
-        
+
         case 11: return .dailyNote
-        
+
         case 12: return .tradingJournalEntry
-        
+
         case 13: return .musicIdea
-        
+
         case 14: return .readingItem
-        
+
         case 15: return .custom(try FfiConverterString.read(from: &buf)
         )
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: NodeType, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .note:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .task:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .event:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .project:
             writeInt(&buf, Int32(4))
-        
-        
+
+
         case .area:
             writeInt(&buf, Int32(5))
-        
-        
+
+
         case .resource:
             writeInt(&buf, Int32(6))
-        
-        
+
+
         case .space:
             writeInt(&buf, Int32(7))
-        
-        
+
+
         case .annotation:
             writeInt(&buf, Int32(8))
-        
-        
+
+
         case .inkNote:
             writeInt(&buf, Int32(9))
-        
-        
+
+
         case .reminder:
             writeInt(&buf, Int32(10))
-        
-        
+
+
         case .dailyNote:
             writeInt(&buf, Int32(11))
-        
-        
+
+
         case .tradingJournalEntry:
             writeInt(&buf, Int32(12))
-        
-        
+
+
         case .musicIdea:
             writeInt(&buf, Int32(13))
-        
-        
+
+
         case .readingItem:
             writeInt(&buf, Int32(14))
-        
-        
+
+
         case let .custom(v1):
             writeInt(&buf, Int32(15))
             FfiConverterString.write(v1, into: &buf)
-            
+
         }
     }
 }
@@ -2975,7 +3011,7 @@ public func FfiConverterTypeNodeType_lower(_ value: NodeType) -> RustBuffer {
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum Priority: Equatable, Hashable {
-    
+
     case urgent
     case high
     case normal
@@ -3000,38 +3036,38 @@ public struct FfiConverterTypePriority: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Priority {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .urgent
-        
+
         case 2: return .high
-        
+
         case 3: return .normal
-        
+
         case 4: return .low
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: Priority, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .urgent:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .high:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .normal:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .low:
             writeInt(&buf, Int32(4))
-        
+
         }
     }
 }
@@ -3056,7 +3092,7 @@ public func FfiConverterTypePriority_lower(_ value: Priority) -> RustBuffer {
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ProjectStatus: Equatable, Hashable {
-    
+
     case someday
     case planned
     case active
@@ -3083,50 +3119,50 @@ public struct FfiConverterTypeProjectStatus: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProjectStatus {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .someday
-        
+
         case 2: return .planned
-        
+
         case 3: return .active
-        
+
         case 4: return .paused
-        
+
         case 5: return .completed
-        
+
         case 6: return .cancelled
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: ProjectStatus, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .someday:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .planned:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .active:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .paused:
             writeInt(&buf, Int32(4))
-        
-        
+
+
         case .completed:
             writeInt(&buf, Int32(5))
-        
-        
+
+
         case .cancelled:
             writeInt(&buf, Int32(6))
-        
+
         }
     }
 }
@@ -3166,6 +3202,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }

@@ -154,7 +154,8 @@ struct QuickCaptureView: View {
             targetDate: nil, sourceUrl: nil, readStatus: nil, reminderText: nil,
             fireAt: nil, reminderStatus: nil, resolved: false, anchor: nil,
             pinned: [], activeFilter: nil, defaultView: nil, theme: nil,
-            inkAttachment: nil, date: nil
+            inkAttachment: nil, date: nil, symbol: nil, entry: nil, exit: nil,
+            pnl: nil, rMultiple: nil
         )
 
         do {
