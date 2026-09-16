@@ -183,6 +183,56 @@ Markets overreact to fear more than to greed.
     }
 
     #[test]
+    fn parse_closed_trading_journal_entry() {
+        let contents = "\
+---
+id: 01JQZ8TRADEID000000000000
+type: trading-journal-entry
+created: 2026-09-02T09:30:00Z
+modified: 2026-09-02T16:05:00Z
+schema_version: 1
+symbol: AAPL
+entry: 187.2
+exit: 191.4
+pnl: 420.0
+r_multiple: 1.4
+---
+
+Broke above 50dma with volume, momentum continuation play.
+";
+        let parsed = ParsedNode::parse(contents).expect("parse should succeed");
+        assert_eq!(parsed.node.symbol.as_deref(), Some("AAPL"));
+        assert_eq!(parsed.node.entry, Some(187.2));
+        assert_eq!(parsed.node.exit, Some(191.4));
+        assert_eq!(parsed.node.pnl, Some(420.0));
+        assert_eq!(parsed.node.r_multiple, Some(1.4));
+    }
+
+    /// An open trade has no `exit` — open/closed is derived from this
+    /// field's presence, not a separate stored status.
+    #[test]
+    fn parse_open_trading_journal_entry_has_no_exit() {
+        let contents = "\
+---
+id: 01JQZ8TRADEID000000000001
+type: trading-journal-entry
+created: 2026-09-07T09:30:00Z
+modified: 2026-09-07T09:30:00Z
+schema_version: 1
+symbol: MSFT
+entry: 402.1
+pnl: 180.0
+---
+
+Holding into next week's guidance — thesis still intact.
+";
+        let parsed = ParsedNode::parse(contents).expect("parse should succeed");
+        assert_eq!(parsed.node.symbol.as_deref(), Some("MSFT"));
+        assert_eq!(parsed.node.exit, None);
+        assert_eq!(parsed.node.pnl, Some(180.0));
+    }
+
+    #[test]
     fn round_trip_identical() {
         let contents = "\
 ---

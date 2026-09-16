@@ -145,6 +145,11 @@ fn import_one(
         theme: None,
         ink_attachment: None,
         date: None,
+        symbol: None,
+        entry: None,
+        exit: None,
+        pnl: None,
+        r_multiple: None,
     };
 
     let dest_rel = Path::new("imported").join(path.strip_prefix(source_root).unwrap_or(path));

@@ -184,7 +184,10 @@ pub struct AnnotationAnchor {
 // The typed Node (deserialized from YAML frontmatter for convenient access)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Not `Eq`: `entry`/`exit`/`pnl`/`r_multiple` are `f64`, which has no `Eq`
+// impl (NaN != NaN). `PartialEq` (bytewise/structural comparison, used by
+// round-trip tests) is unaffected.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     // -- required shared --
     pub id: NodeId,
@@ -273,6 +276,30 @@ pub struct Node {
     pub ink_attachment: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<NaiveDate>,
+
+    // -- trading-journal-entry (SCHEMA_SPEC.md's own suggested field set:
+    // "a trading entry adds symbol, thesis, entry, exit, pnl") --
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<f64>,
+    /// Absent while the trade is still open — open/closed is derived from
+    /// this, not a separate status field (same reasoning `someday_maybe`'s
+    /// view already applies: state falls out of which dates are set,
+    /// rather than being redundantly stored twice).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit: Option<f64>,
+    /// Realized P&L once `exit` is set, unrealized P&L while it isn't —
+    /// one field, meaning determined by `exit`'s presence, matching
+    /// SCHEMA_SPEC's minimal suggested set exactly rather than splitting
+    /// into two fields that are never both meaningful at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pnl: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r_multiple: Option<f64>,
+    // `thesis` (the mockup's italic trade note) is deliberately not a
+    // field — it's free-form prose, exactly what the node body already is
+    // for; a dedicated field would just duplicate the body.
 }
 
 fn default_schema_version() -> u32 {

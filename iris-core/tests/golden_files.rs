@@ -30,6 +30,11 @@ fn golden_file_round_trip_note_with_comment() {
     assert_round_trip("tests/fixtures/note-with-comment.md");
 }
 
+#[test]
+fn golden_file_round_trip_trading_journal_entry() {
+    assert_round_trip("tests/fixtures/trading-journal-entry.md");
+}
+
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------

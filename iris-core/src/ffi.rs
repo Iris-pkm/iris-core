@@ -177,7 +177,9 @@ impl TryFrom<FfiRecurrence> for Recurrence {
 /// `Node`, boundary-safe: every `DateTime<Utc>` is an RFC3339 string, every
 /// `NaiveDate` an ISO-8601 (`YYYY-MM-DD`) string, `anchor` uses
 /// `FfiAnnotationAnchor`. Field order and names otherwise match `Node`.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+// Not `Eq`, same reason as `Node`: `entry`/`exit`/`pnl`/`r_multiple` are
+// `f64`, which has no `Eq` impl.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct FfiNode {
     pub id: crate::types::NodeId,
     pub node_type: crate::types::NodeType,
@@ -222,6 +224,11 @@ pub struct FfiNode {
     pub theme: Option<String>,
     pub ink_attachment: Option<String>,
     pub date: Option<String>,
+    pub symbol: Option<String>,
+    pub entry: Option<f64>,
+    pub exit: Option<f64>,
+    pub pnl: Option<f64>,
+    pub r_multiple: Option<f64>,
 }
 
 impl From<&Node> for FfiNode {
@@ -270,6 +277,11 @@ impl From<&Node> for FfiNode {
             theme: n.theme.clone(),
             ink_attachment: n.ink_attachment.clone(),
             date: n.date.as_ref().map(to_iso_date),
+            symbol: n.symbol.clone(),
+            entry: n.entry,
+            exit: n.exit,
+            pnl: n.pnl,
+            r_multiple: n.r_multiple,
         }
     }
 }
@@ -362,6 +374,11 @@ impl TryFrom<FfiNode> for Node {
                 .as_deref()
                 .map(|v| from_iso_date("date", v))
                 .transpose()?,
+            symbol: f.symbol,
+            entry: f.entry,
+            exit: f.exit,
+            pnl: f.pnl,
+            r_multiple: f.r_multiple,
         })
     }
 }
@@ -825,6 +842,11 @@ mod tests {
             theme: None,
             ink_attachment: None,
             date: None,
+            symbol: None,
+            entry: None,
+            exit: None,
+            pnl: None,
+            r_multiple: None,
         }
     }
 

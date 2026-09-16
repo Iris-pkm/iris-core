@@ -726,6 +726,11 @@ fn new_annotation(target_id: crate::types::NodeId, text_fragment: Option<String>
         theme: None,
         ink_attachment: None,
         date: None,
+        symbol: None,
+        entry: None,
+        exit: None,
+        pnl: None,
+        r_multiple: None,
     }
 }
 
@@ -820,6 +825,11 @@ mod tests {
             theme: None,
             ink_attachment: None,
             date: None,
+            symbol: None,
+            entry: None,
+            exit: None,
+            pnl: None,
+            r_multiple: None,
         }
     }
 
