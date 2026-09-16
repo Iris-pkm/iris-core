@@ -32,6 +32,8 @@ struct AppShell: View {
     /// directly via `openNode`. All three selections are mutually exclusive.
     @State private var workbenchCategory: PARAWorkbenchView.Category?
     @State private var showSearch = false
+    @State private var showQuickCapture = false
+    @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
         ZStack {
@@ -65,6 +67,26 @@ struct AppShell: View {
                     showSearch = false
                 }
             }
+
+            if showQuickCapture {
+                QuickCaptureView(
+                    engine: engine,
+                    recentCaptures: recentCaptures,
+                    dismiss: { showQuickCapture = false }
+                ) { item in
+                    recentCaptures.insert(item, at: 0)
+                    showQuickCapture = false
+                }
+            }
+
+            // A mounted command is the small SwiftUI-native bridge from the
+            // documented shortcut to this global overlay. A true outside-the-
+            // app hotkey needs the later NSPanel/event-monitoring integration.
+            Button("", action: { showQuickCapture = true })
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
         .background(c.bgCanvas)
         .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
