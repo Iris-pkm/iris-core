@@ -37,6 +37,7 @@ struct AppShell: View {
     @State private var showHistory = false
     @State private var showSpaces = false
     @State private var activeSpaceID: String?
+    @State private var showDailyNote = false
     @State private var recentCaptures: [CaptureItem] = []
 
     var body: some View {
@@ -50,11 +51,14 @@ struct AppShell: View {
                     showTrash: $showTrash,
                     showHistory: $showHistory,
                     showSpaces: $showSpaces,
+                    showDailyNote: $showDailyNote,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showSpaces {
+                if showDailyNote {
+                    DailyNoteView(engine: engine)
+                } else if showSpaces {
                     SpacesView(engine: engine, activeSpaceID: $activeSpaceID)
                 } else if showHistory {
                     HistoryView(engine: engine)
@@ -177,6 +181,7 @@ private struct Sidebar: View {
     @Binding var showTrash: Bool
     @Binding var showHistory: Bool
     @Binding var showSpaces: Bool
+    @Binding var showDailyNote: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -195,6 +200,7 @@ private struct Sidebar: View {
             }
 
             searchBar
+            dailyNoteRow
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(TaskLens.allCases) { lens in
@@ -272,6 +278,23 @@ private struct Sidebar: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut("k", modifiers: .command)
+    }
+
+    private var dailyNoteRow: some View {
+        Button {
+            selectedLens = nil; workbenchCategory = nil; openNode = nil
+            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = true
+        } label: {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "calendar").font(.system(size: 12))
+                Text("Today").font(Typography.bodySans())
+                Spacer()
+            }
+            .foregroundStyle(showDailyNote ? c.accentDefault : c.textPrimary)
+            .padding(Space.sm).background(showDailyNote ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) { if showDailyNote { Rectangle().fill(c.accentDefault).frame(width: 2) } }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }.buttonStyle(.plain)
     }
 
     private func section(title: String, category: PARAWorkbenchView.Category, dotColor: Color, nodes: [CachedNode]) -> some View {
