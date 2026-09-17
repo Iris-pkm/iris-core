@@ -60,11 +60,12 @@ struct OnboardingView: View {
     @State private var errorMessage: String?
     @State private var readyEngine: FfiEngine?
     @State private var restoreURL: String = ""
+    @AppStorage("iris.launchView") private var launchView = "Today"
 
     var body: some View {
         VStack(spacing: 0) {
             if let engine = readyEngine {
-                AppShell(engine: engine)
+                AppShell(engine: engine, initialLens: initialLens)
             } else {
                 content
             }
@@ -76,6 +77,13 @@ struct OnboardingView: View {
         }, message: {
             Text(errorMessage ?? "")
         })
+    }
+
+    private var initialLens: TaskLens? {
+        switch launchView {
+        case "Inbox": return .inbox
+        default: return .today
+        }
     }
 
     private var content: some View {

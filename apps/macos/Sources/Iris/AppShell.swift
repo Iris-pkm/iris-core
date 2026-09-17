@@ -42,6 +42,11 @@ struct AppShell: View {
     @State private var showMusicIdeas = false
     @State private var recentCaptures: [CaptureItem] = []
 
+    init(engine: FfiEngine, initialLens: TaskLens? = nil) {
+        self.engine = engine
+        _selectedLens = State(initialValue: initialLens)
+    }
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
