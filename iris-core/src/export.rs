@@ -33,6 +33,17 @@ use typst_layout::PagedDocument;
 use crate::error::{IrisError, IrisResult};
 use crate::parser::ParsedNode;
 
+/// The Stage 1 export formats promised by ADR-028. The writers below remain
+/// the sole format-specific boundary; callers receive bytes suitable for a
+/// native save panel without knowing how a format is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Json,
+    Csv,
+    Html,
+    Pdf,
+}
+
 /// The intermediate document model: a node's resolved content, independent
 /// of any output format.
 #[derive(Debug, Clone, Serialize)]
@@ -144,6 +155,16 @@ pub fn to_pdf(doc: &IdmDoc) -> IrisResult<Vec<u8>> {
 
     typst_pdf::pdf(&typst_doc, &Default::default())
         .map_err(|e| IrisError::Validation(format!("PDF export failed to render: {e:?}")))
+}
+
+/// Render one resolved node through a Stage 1 writer.
+pub fn render(doc: &IdmDoc, format: ExportFormat) -> IrisResult<Vec<u8>> {
+    match format {
+        ExportFormat::Json => Ok(to_json(doc)?.into_bytes()),
+        ExportFormat::Csv => Ok(to_csv(std::slice::from_ref(doc))?.into_bytes()),
+        ExportFormat::Html => Ok(to_html(doc).into_bytes()),
+        ExportFormat::Pdf => to_pdf(doc),
+    }
 }
 
 /// Converts a markdown body to Typst markup by walking `pulldown-cmark`'s

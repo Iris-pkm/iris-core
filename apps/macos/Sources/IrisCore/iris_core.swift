@@ -513,6 +513,24 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
@@ -555,6 +573,12 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     func dependedOnBy(nodeId: String) throws  -> [CachedNode]
 
     func distillationQueue(projectId: String) throws  -> [CachedNode]
+
+    /**
+     * Render one node to bytes; native shells choose a destination using the
+     * platform's save panel rather than handing paths across the FFI boundary.
+     */
+    func exportNode(relPath: String, format: FfiExportFormat) throws  -> Data
 
     /**
      * Import every `.md` file under `source` as a plain note. No link
@@ -851,6 +875,20 @@ open func distillationQueue(projectId: String)throws  -> [CachedNode]  {
     uniffi_iris_core_fn_method_ffiengine_distillation_queue(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(projectId),$0
+    )
+})
+}
+
+    /**
+     * Render one node to bytes; native shells choose a destination using the
+     * platform's save panel rather than handing paths across the FFI boundary.
+     */
+open func exportNode(relPath: String, format: FfiExportFormat)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_export_node(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(relPath),
+        FfiConverterTypeFfiExportFormat_lower(format),$0
     )
 })
 }
@@ -2690,6 +2728,90 @@ public func FfiConverterTypeFfiEngineError_lower(_ value: FfiEngineError) -> Rus
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Native-shell names for ADR-028's real Stage 1 writers.
+ */
+
+public enum FfiExportFormat: Equatable, Hashable {
+
+    case json
+    case csv
+    case html
+    case pdf
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension FfiExportFormat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiExportFormat: FfiConverterRustBuffer {
+    typealias SwiftType = FfiExportFormat
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiExportFormat {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .json
+
+        case 2: return .csv
+
+        case 3: return .html
+
+        case 4: return .pdf
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FfiExportFormat, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .json:
+            writeInt(&buf, Int32(1))
+
+
+        case .csv:
+            writeInt(&buf, Int32(2))
+
+
+        case .html:
+            writeInt(&buf, Int32(3))
+
+
+        case .pdf:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiExportFormat_lift(_ buf: RustBuffer) throws -> FfiExportFormat {
+    return try FfiConverterTypeFfiExportFormat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiExportFormat_lower(_ value: FfiExportFormat) -> RustBuffer {
+    return FfiConverterTypeFfiExportFormat.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * `Recurrence` with `until`'s `NaiveDate` as an ISO-8601 string, same reason
  * as everywhere else in this module: `uniffi` has no `NaiveDate` support.
  */
@@ -3776,6 +3898,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_distillation_queue() != 1997) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_export_node() != 51645) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_import_markdown_folder() != 11960) {

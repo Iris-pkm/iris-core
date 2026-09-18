@@ -358,6 +358,11 @@ RustBuffer uniffi_iris_core_fn_method_ffiengine_depended_on_by(uint64_t ptr, Rus
 RustBuffer uniffi_iris_core_fn_method_ffiengine_distillation_queue(uint64_t ptr, RustBuffer project_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_EXPORT_NODE
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_EXPORT_NODE
+RustBuffer uniffi_iris_core_fn_method_ffiengine_export_node(uint64_t ptr, RustBuffer rel_path, RustBuffer format, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_IMPORT_MARKDOWN_FOLDER
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_IMPORT_MARKDOWN_FOLDER
 RustBuffer uniffi_iris_core_fn_method_ffiengine_import_markdown_folder(uint64_t ptr, RustBuffer source, RustCallStatus *_Nonnull out_status
@@ -511,7 +516,7 @@ RustBuffer uniffi_iris_core_fn_func_round_trip_node(RustBuffer ffi, RustCallStat
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_CURRENT_SCHEMA_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_CURRENT_SCHEMA_VERSION
 uint32_t uniffi_iris_core_fn_func_current_schema_version(RustCallStatus *_Nonnull out_status
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_DESCRIBE_RELATION
@@ -522,13 +527,13 @@ RustBuffer uniffi_iris_core_fn_func_describe_relation(RustBuffer rel, RustCallSt
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_NEW_NODE_ID
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_NEW_NODE_ID
 RustBuffer uniffi_iris_core_fn_func_new_node_id(RustCallStatus *_Nonnull out_status
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_SAMPLE_CUSTOM_NODE_TYPE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_SAMPLE_CUSTOM_NODE_TYPE
 RustBuffer uniffi_iris_core_fn_func_sample_custom_node_type(RustCallStatus *_Nonnull out_status
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_IRIS_CORE_RUSTBUFFER_ALLOC
@@ -794,337 +799,343 @@ void ffi_iris_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_N
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_RESTORE_FROM_BACKUP
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_RESTORE_FROM_BACKUP
 uint16_t uniffi_iris_core_checksum_func_restore_from_backup(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_ROUND_TRIP_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_ROUND_TRIP_NODE
 uint16_t uniffi_iris_core_checksum_func_round_trip_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_CURRENT_SCHEMA_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_CURRENT_SCHEMA_VERSION
 uint16_t uniffi_iris_core_checksum_func_current_schema_version(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_DESCRIBE_RELATION
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_DESCRIBE_RELATION
 uint16_t uniffi_iris_core_checksum_func_describe_relation(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_NEW_NODE_ID
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_NEW_NODE_ID
 uint16_t uniffi_iris_core_checksum_func_new_node_id(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_SAMPLE_CUSTOM_NODE_TYPE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_SAMPLE_CUSTOM_NODE_TYPE
 uint16_t uniffi_iris_core_checksum_func_sample_custom_node_type(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_ACTIVATION_ENVIRONMENT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_ACTIVATION_ENVIRONMENT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_activation_environment(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_ADD_COMMENT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_ADD_COMMENT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_add_comment(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKED_BY
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKED_BY
 uint16_t uniffi_iris_core_checksum_method_ffiengine_blocked_by(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKED_BY_INCOMING
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKED_BY_INCOMING
 uint16_t uniffi_iris_core_checksum_method_ffiengine_blocked_by_incoming(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_BLOCKS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_blocks(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CAN_REDO
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CAN_REDO
 uint16_t uniffi_iris_core_checksum_method_ffiengine_can_redo(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CAN_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CAN_UNDO
 uint16_t uniffi_iris_core_checksum_method_ffiengine_can_undo(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CHECK_INTEGRITY
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CHECK_INTEGRITY
 uint16_t uniffi_iris_core_checksum_method_ffiengine_check_integrity(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CHECKOUT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CHECKOUT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_checkout(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_COMPLETE_TASK
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_COMPLETE_TASK
 uint16_t uniffi_iris_core_checksum_method_ffiengine_complete_task(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CONNECTIONS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CONNECTIONS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_connections(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_BRANCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_BRANCH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_create_branch(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_CHECKPOINT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_CHECKPOINT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_create_checkpoint(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CREATE_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_create_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CURRENT_BRANCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_CURRENT_BRANCH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_current_branch(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DAILY_CAPTURES
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DAILY_CAPTURES
 uint16_t uniffi_iris_core_checksum_method_ffiengine_daily_captures(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DELETE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DELETE_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_delete_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DEPENDED_ON_BY
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DEPENDED_ON_BY
 uint16_t uniffi_iris_core_checksum_method_ffiengine_depended_on_by(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DISTILLATION_QUEUE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_DISTILLATION_QUEUE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_distillation_queue(void
-    
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_EXPORT_NODE
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_EXPORT_NODE
+uint16_t uniffi_iris_core_checksum_method_ffiengine_export_node(void
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IMPORT_MARKDOWN_FOLDER
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IMPORT_MARKDOWN_FOLDER
 uint16_t uniffi_iris_core_checksum_method_ffiengine_import_markdown_folder(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IMPORT_OBSIDIAN_VAULT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IMPORT_OBSIDIAN_VAULT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_import_obsidian_vault(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INBOX
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INBOX
 uint16_t uniffi_iris_core_checksum_method_ffiengine_inbox(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_instantiate_template(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IS_BLOCKED
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_IS_BLOCKED
 uint16_t uniffi_iris_core_checksum_method_ffiengine_is_blocked(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_BRANCHES
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_BRANCHES
 uint16_t uniffi_iris_core_checksum_method_ffiengine_list_branches(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_CHECKPOINTS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_CHECKPOINTS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_list_checkpoints(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOG_POMODORO
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOG_POMODORO
 uint16_t uniffi_iris_core_checksum_method_ffiengine_log_pomodoro(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOGBOOK
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LOGBOOK
 uint16_t uniffi_iris_core_checksum_method_ffiengine_logbook(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PROJECT_TASKS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PROJECT_TASKS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_project_tasks(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DAYS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DAYS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_purge_expired_trash_days(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DEFAULT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_PURGE_EXPIRED_TRASH_DEFAULT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_purge_expired_trash_default(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_READ_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_READ_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_read_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REBUILD_CACHE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REBUILD_CACHE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_rebuild_cache(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REDO
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REDO
 uint16_t uniffi_iris_core_checksum_method_ffiengine_redo(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REPLY_TO_ANNOTATION
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_REPLY_TO_ANNOTATION
 uint16_t uniffi_iris_core_checksum_method_ffiengine_reply_to_annotation(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_RESTORE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_RESTORE_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_restore_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SEARCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SEARCH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_search(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_ANNOTATION_RESOLVED
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_ANNOTATION_RESOLVED
 uint16_t uniffi_iris_core_checksum_method_ffiengine_set_annotation_resolved(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 uint16_t uniffi_iris_core_checksum_method_ffiengine_set_distillation_level(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_PROJECT_STATUS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_PROJECT_STATUS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_set_project_status(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SOMEDAY_MAYBE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SOMEDAY_MAYBE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_someday_maybe(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_TODAY
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_TODAY
 uint16_t uniffi_iris_core_checksum_method_ffiengine_today(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_TRASH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_TRASH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_trash(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UNDO
 uint16_t uniffi_iris_core_checksum_method_ffiengine_undo(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPCOMING
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPCOMING
 uint16_t uniffi_iris_core_checksum_method_ffiengine_upcoming(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_update_node(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_VAULT_ROOT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_VAULT_ROOT
 uint16_t uniffi_iris_core_checksum_method_ffiengine_vault_root(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_CONSTRUCTOR_FFIENGINE_INIT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_CONSTRUCTOR_FFIENGINE_INIT
 uint16_t uniffi_iris_core_checksum_constructor_ffiengine_init(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_CONSTRUCTOR_FFIENGINE_OPEN
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_CONSTRUCTOR_FFIENGINE_OPEN
 uint16_t uniffi_iris_core_checksum_constructor_ffiengine_open(void
-    
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_IRIS_CORE_UNIFFI_CONTRACT_VERSION
 #define UNIFFI_FFIDEF_FFI_IRIS_CORE_UNIFFI_CONTRACT_VERSION
 uint32_t ffi_iris_core_uniffi_contract_version(void
-    
+
 );
 #endif
 

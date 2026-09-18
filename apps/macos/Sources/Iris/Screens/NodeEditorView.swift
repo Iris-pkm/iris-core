@@ -21,16 +21,22 @@ struct NodeEditorView: View {
     @State private var parsed: FfiParsedNode?
     @State private var linkedCount: Int = 0
     @State private var loadError: String?
+    @State private var showExport = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if let parsed {
                     metaRow(for: parsed.node)
-                    Text(titleFor(parsed.node))
-                        .font(Typography.h1())
-                        .foregroundStyle(c.textPrimary)
-                        .padding(.bottom, Space.sm)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(titleFor(parsed.node))
+                            .font(Typography.h1())
+                            .foregroundStyle(c.textPrimary)
+                        Spacer()
+                        Button("Export…") { showExport = true }
+                            .buttonStyle(.bordered)
+                    }
+                    .padding(.bottom, Space.sm)
 
                     if !parsed.node.tags.isEmpty {
                         HStack(spacing: Space.xs) {
@@ -63,6 +69,9 @@ struct NodeEditorView: View {
         .background(c.bgCanvas)
         .id(relPath) // fresh load whenever a different node opens
         .task(id: relPath) { load() }
+        .sheet(isPresented: $showExport) {
+            ExportSheet(engine: engine, relPath: relPath, title: titleFor(parsed?.node), dismiss: { showExport = false })
+        }
     }
 
     private func metaRow(for node: FfiNode) -> some View {
@@ -125,7 +134,7 @@ struct NodeEditorView: View {
 
     /// No dedicated `title` field in the schema yet — the file's basename
     /// stands in, same stand-in `search.rs`/`Sidebar` already use.
-    private func titleFor(_ node: FfiNode) -> String {
+    private func titleFor(_ node: FfiNode?) -> String {
         (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
     }
 

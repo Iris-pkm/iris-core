@@ -17,6 +17,7 @@ use chrono::Utc;
 
 use crate::cache::Cache;
 use crate::error::{IrisError, IrisResult};
+use crate::export::{self, ExportFormat, IdmDoc};
 use crate::git::GitRepo;
 use crate::integrity::{self, IntegrityReport};
 use crate::parser::ParsedNode;
@@ -148,6 +149,18 @@ impl Engine {
     /// Read a node.
     pub fn read_node(&self, rel_path: impl AsRef<Path>) -> IrisResult<ParsedNode> {
         self.vault.read_node(rel_path)
+    }
+
+    /// Render one canonical node with an ADR-028 Stage 1 exporter. This is
+    /// read-only: the native shell owns destination selection and file I/O.
+    pub fn export_node(
+        &self,
+        rel_path: impl AsRef<Path>,
+        format: ExportFormat,
+    ) -> IrisResult<Vec<u8>> {
+        let rel_path = rel_path.as_ref();
+        let parsed = self.vault.read_node(rel_path)?;
+        export::render(&IdmDoc::from_parsed(&parsed, rel_path), format)
     }
 
     /// Tier 1 template instantiation (DECISION_LOG.md ADR-026): copy a node
@@ -880,6 +893,26 @@ mod tests {
         // git history: create + update + delete = 3 commits
         assert_eq!(engine.git.history().unwrap().len(), 3);
         assert!(engine.git.status().unwrap().is_empty());
+    }
+
+    #[test]
+    fn export_node_reads_canonical_content_without_mutating_it() {
+        let dir = TempDir::new("export");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let node = sample_node();
+        engine
+            .create_node("notes/export.md", &node, "\n# Exported\n")
+            .unwrap();
+
+        let exported = engine
+            .export_node("notes/export.md", ExportFormat::Json)
+            .unwrap();
+
+        assert!(String::from_utf8(exported).unwrap().contains("# Exported"));
+        assert_eq!(
+            engine.read_node("notes/export.md").unwrap().body,
+            "\n# Exported\n"
+        );
     }
 
     #[test]

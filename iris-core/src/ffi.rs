@@ -15,6 +15,26 @@
 use crate::types::{AnnotationAnchor, Node, Recurrence};
 use chrono::{DateTime, NaiveDate, Utc};
 
+/// Native-shell names for ADR-028's real Stage 1 writers.
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum FfiExportFormat {
+    Json,
+    Csv,
+    Html,
+    Pdf,
+}
+
+impl From<FfiExportFormat> for crate::export::ExportFormat {
+    fn from(format: FfiExportFormat) -> Self {
+        match format {
+            FfiExportFormat::Json => Self::Json,
+            FfiExportFormat::Csv => Self::Csv,
+            FfiExportFormat::Html => Self::Html,
+            FfiExportFormat::Pdf => Self::Pdf,
+        }
+    }
+}
+
 /// Errors converting an `FfiNode` (native-side data) back into a `Node`.
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum FfiConversionError {
@@ -538,6 +558,16 @@ impl FfiEngine {
     pub fn read_node(&self, rel_path: String) -> Result<FfiParsedNode, FfiEngineError> {
         let parsed = self.lock().read_node(rel_path)?;
         parsed.try_into().map_err(ffi_conv_err)
+    }
+
+    /// Render one node to bytes; native shells choose a destination using the
+    /// platform's save panel rather than handing paths across the FFI boundary.
+    pub fn export_node(
+        &self,
+        rel_path: String,
+        format: FfiExportFormat,
+    ) -> Result<Vec<u8>, FfiEngineError> {
+        Ok(self.lock().export_node(rel_path, format.into())?)
     }
 
     pub fn update_node(&self, rel_path: String, node: FfiNode) -> Result<(), FfiEngineError> {
