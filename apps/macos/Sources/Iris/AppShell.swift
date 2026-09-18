@@ -40,6 +40,7 @@ struct AppShell: View {
     @State private var showDailyNote = false
     @State private var showReadingList = false
     @State private var showMusicIdeas = false
+    @State private var showCalendar = false
     @State private var recentCaptures: [CaptureItem] = []
 
     init(engine: FfiEngine, initialLens: TaskLens? = nil) {
@@ -61,6 +62,7 @@ struct AppShell: View {
                     showDailyNote: $showDailyNote,
                     showReadingList: $showReadingList,
                     showMusicIdeas: $showMusicIdeas,
+                    showCalendar: $showCalendar,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
@@ -86,6 +88,8 @@ struct AppShell: View {
                     })
                 } else if let openNode {
                     detail(for: openNode)
+                } else if showCalendar {
+                    CalendarView(engine: engine)
                 } else {
                     emptyState
                 }
@@ -205,6 +209,7 @@ private struct Sidebar: View {
     @Binding var showDailyNote: Bool
     @Binding var showReadingList: Bool
     @Binding var showMusicIdeas: Bool
+    @Binding var showCalendar: Bool
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -226,6 +231,7 @@ private struct Sidebar: View {
             dailyNoteRow
             readingListRow
             musicIdeasRow
+            calendarRow
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(TaskLens.allCases) { lens in
@@ -349,6 +355,17 @@ private struct Sidebar: View {
             HStack(spacing: Space.sm) { Image(systemName: "music.note").font(.system(size: 12)); Text("Music Ideas").font(Typography.bodySans()); Spacer() }
                 .foregroundStyle(showMusicIdeas ? c.accentDefault : c.textPrimary).padding(Space.sm).background(showMusicIdeas ? c.bgSelected : Color.clear)
                 .overlay(alignment: .leading) { if showMusicIdeas { Rectangle().fill(c.accentDefault).frame(width: 2) } }.clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        }.buttonStyle(.plain)
+    }
+
+    private var calendarRow: some View {
+        Button {
+            selectedLens = nil; workbenchCategory = nil; openNode = nil
+            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = false; showMusicIdeas = false; showCalendar = true
+        } label: {
+            HStack(spacing: Space.sm) { Image(systemName: "calendar.badge.clock").font(.system(size: 12)); Text("Calendar").font(Typography.bodySans()); Spacer() }
+                .foregroundStyle(showCalendar ? c.accentDefault : c.textPrimary).padding(Space.sm).background(showCalendar ? c.bgSelected : Color.clear)
+                .overlay(alignment: .leading) { if showCalendar { Rectangle().fill(c.accentDefault).frame(width: 2) } }.clipShape(RoundedRectangle(cornerRadius: Radius.md))
         }.buttonStyle(.plain)
     }
 
