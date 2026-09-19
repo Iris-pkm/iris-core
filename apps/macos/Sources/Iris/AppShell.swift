@@ -1,6 +1,20 @@
 import SwiftUI
 import IrisCore
 
+/// The seven "standing" sidebar destinations (Trash/History/Spaces/Today/
+/// Reading List/Music Ideas/Calendar) as one selection, not seven
+/// independent booleans. They used to be separate `@State` bools on
+/// `AppShell`, each row clearing only *some* of its siblings by hand —
+/// `showCalendar` in particular got missed by nearly every other row's
+/// handler, so several sidebar rows could show as "active" simultaneously
+/// even though the content pane (an if/else chain) only ever rendered one.
+/// One enum, shared by `AppShell` and `Sidebar`, makes that class of bug
+/// structurally impossible, matching how `selectedLens`/`workbenchCategory`
+/// already work.
+fileprivate enum AuxScreen {
+    case trash, history, spaces, dailyNote, readingList, musicIdeas, calendar
+}
+
 /// The persistent three-pane shell (`design/navigation.md` §1): sidebar +
 /// main content pane + optional right panel. Mounts once a vault is open
 /// (`design/screen-flow.md`'s "Onboarding -> app shell" edge, kind A-like
@@ -33,14 +47,17 @@ struct AppShell: View {
     @State private var workbenchCategory: PARAWorkbenchView.Category?
     @State private var showSearch = false
     @State private var showQuickCapture = false
-    @State private var showTrash = false
-    @State private var showHistory = false
-    @State private var showSpaces = false
+    /// The seven "standing" sidebar destinations (Trash/History/Spaces/
+    /// Today/Reading List/Music Ideas/Calendar) as one selection, not seven
+    /// independent booleans. They used to be separate `@State` bools, each
+    /// row clearing only *some* of its siblings by hand — `showCalendar`
+    /// in particular got missed by nearly every other row's handler, so
+    /// several sidebar rows could show as "active" simultaneously even
+    /// though the content pane (an if/else chain) only ever rendered one.
+    /// One enum makes that class of bug structurally impossible, matching
+    /// how `selectedLens`/`workbenchCategory` already work.
+    @State private var auxScreen: AuxScreen?
     @State private var activeSpaceID: String?
-    @State private var showDailyNote = false
-    @State private var showReadingList = false
-    @State private var showMusicIdeas = false
-    @State private var showCalendar = false
     @State private var recentCaptures: [CaptureItem] = []
 
     init(engine: FfiEngine, initialLens: TaskLens? = nil) {
@@ -56,29 +73,13 @@ struct AppShell: View {
                     openNode: $openNode,
                     selectedLens: $selectedLens,
                     workbenchCategory: $workbenchCategory,
-                    showTrash: $showTrash,
-                    showHistory: $showHistory,
-                    showSpaces: $showSpaces,
-                    showDailyNote: $showDailyNote,
-                    showReadingList: $showReadingList,
-                    showMusicIdeas: $showMusicIdeas,
-                    showCalendar: $showCalendar,
+                    auxScreen: $auxScreen,
                     showSearch: { showSearch = true }
                 )
                 Divider().background(c.borderDefault)
 
-                if showMusicIdeas {
-                    MusicIdeasView(engine: engine)
-                } else if showReadingList {
-                    ReadingListView(engine: engine)
-                } else if showDailyNote {
-                    DailyNoteView(engine: engine)
-                } else if showSpaces {
-                    SpacesView(engine: engine, activeSpaceID: $activeSpaceID)
-                } else if showHistory {
-                    HistoryView(engine: engine)
-                } else if showTrash {
-                    TrashView(engine: engine)
+                if let auxScreen {
+                    auxScreenView(for: auxScreen)
                 } else if let selectedLens {
                     lensView(for: selectedLens)
                 } else if let workbenchCategory {
@@ -88,8 +89,6 @@ struct AppShell: View {
                     })
                 } else if let openNode {
                     detail(for: openNode)
-                } else if showCalendar {
-                    CalendarView(engine: engine)
                 } else {
                     emptyState
                 }
@@ -124,6 +123,19 @@ struct AppShell: View {
         }
         .background(c.bgCanvas)
         .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+    }
+
+    @ViewBuilder
+    private func auxScreenView(for screen: AuxScreen) -> some View {
+        switch screen {
+        case .musicIdeas: MusicIdeasView(engine: engine)
+        case .readingList: ReadingListView(engine: engine)
+        case .dailyNote: DailyNoteView(engine: engine)
+        case .spaces: SpacesView(engine: engine, activeSpaceID: $activeSpaceID)
+        case .history: HistoryView(engine: engine)
+        case .trash: TrashView(engine: engine)
+        case .calendar: CalendarView(engine: engine)
+        }
     }
 
     /// A task row inside any lens opens straight into the Node Editor
@@ -203,13 +215,7 @@ private struct Sidebar: View {
     @Binding var openNode: CachedNode?
     @Binding var selectedLens: TaskLens?
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
-    @Binding var showTrash: Bool
-    @Binding var showHistory: Bool
-    @Binding var showSpaces: Bool
-    @Binding var showDailyNote: Bool
-    @Binding var showReadingList: Bool
-    @Binding var showMusicIdeas: Bool
-    @Binding var showCalendar: Bool
+    @Binding var auxScreen: AuxScreen?
     let showSearch: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -265,12 +271,7 @@ private struct Sidebar: View {
         return Button {
             openNode = nil
             workbenchCategory = nil
-            showTrash = false
-            showHistory = false
-            showSpaces = false
-            showDailyNote = false
-            showReadingList = false
-            showMusicIdeas = false
+            auxScreen = nil
             selectedLens = lens
         } label: {
             HStack {
@@ -314,69 +315,51 @@ private struct Sidebar: View {
         .keyboardShortcut("k", modifiers: .command)
     }
 
-    private var dailyNoteRow: some View {
-        Button {
-            selectedLens = nil; workbenchCategory = nil; openNode = nil
-            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = true
+    /// Shared row shape for the seven `AuxScreen` sidebar destinations —
+    /// one implementation instead of seven near-identical `Button`s that
+    /// each drifted slightly (this is exactly how `showCalendar` got left
+    /// out of several of the old handlers).
+    private func auxScreenRow(_ screen: AuxScreen, icon: String, title: String, trailingCount: Int? = nil) -> some View {
+        let isActive = auxScreen == screen
+        return Button {
+            selectedLens = nil
+            workbenchCategory = nil
+            openNode = nil
+            auxScreen = screen
         } label: {
             HStack(spacing: Space.sm) {
-                Image(systemName: "calendar").font(.system(size: 12))
-                Text("Today").font(Typography.bodySans())
+                Image(systemName: icon).font(.system(size: 12))
+                Text(title).font(Typography.bodySans())
                 Spacer()
+                if let trailingCount {
+                    Text("\(trailingCount)").font(Typography.caption())
+                }
             }
-            .foregroundStyle(showDailyNote ? c.accentDefault : c.textPrimary)
-            .padding(Space.sm).background(showDailyNote ? c.bgSelected : Color.clear)
-            .overlay(alignment: .leading) { if showDailyNote { Rectangle().fill(c.accentDefault).frame(width: 2) } }
+            .foregroundStyle(isActive ? c.accentDefault : c.textPrimary)
+            .padding(Space.sm)
+            .background(isActive ? c.bgSelected : Color.clear)
+            .overlay(alignment: .leading) {
+                if isActive { Rectangle().fill(c.accentDefault).frame(width: 2) }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
     }
 
-    private var readingListRow: some View {
-        Button {
-            selectedLens = nil; workbenchCategory = nil; openNode = nil
-            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = true
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: "books.vertical").font(.system(size: 12))
-                Text("Reading List").font(Typography.bodySans())
-                Spacer()
-            }.foregroundStyle(showReadingList ? c.accentDefault : c.textPrimary)
-                .padding(Space.sm).background(showReadingList ? c.bgSelected : Color.clear)
-                .overlay(alignment: .leading) { if showReadingList { Rectangle().fill(c.accentDefault).frame(width: 2) } }
-                .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }.buttonStyle(.plain)
-    }
-
-    private var musicIdeasRow: some View {
-        Button {
-            selectedLens = nil; workbenchCategory = nil; openNode = nil
-            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = false; showMusicIdeas = true
-        } label: {
-            HStack(spacing: Space.sm) { Image(systemName: "music.note").font(.system(size: 12)); Text("Music Ideas").font(Typography.bodySans()); Spacer() }
-                .foregroundStyle(showMusicIdeas ? c.accentDefault : c.textPrimary).padding(Space.sm).background(showMusicIdeas ? c.bgSelected : Color.clear)
-                .overlay(alignment: .leading) { if showMusicIdeas { Rectangle().fill(c.accentDefault).frame(width: 2) } }.clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }.buttonStyle(.plain)
-    }
-
-    private var calendarRow: some View {
-        Button {
-            selectedLens = nil; workbenchCategory = nil; openNode = nil
-            showTrash = false; showHistory = false; showSpaces = false; showDailyNote = false; showReadingList = false; showMusicIdeas = false; showCalendar = true
-        } label: {
-            HStack(spacing: Space.sm) { Image(systemName: "calendar.badge.clock").font(.system(size: 12)); Text("Calendar").font(Typography.bodySans()); Spacer() }
-                .foregroundStyle(showCalendar ? c.accentDefault : c.textPrimary).padding(Space.sm).background(showCalendar ? c.bgSelected : Color.clear)
-                .overlay(alignment: .leading) { if showCalendar { Rectangle().fill(c.accentDefault).frame(width: 2) } }.clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }.buttonStyle(.plain)
-    }
+    private var dailyNoteRow: some View { auxScreenRow(.dailyNote, icon: "calendar", title: "Today") }
+    private var readingListRow: some View { auxScreenRow(.readingList, icon: "books.vertical", title: "Reading List") }
+    private var musicIdeasRow: some View { auxScreenRow(.musicIdeas, icon: "music.note", title: "Music Ideas") }
+    private var calendarRow: some View { auxScreenRow(.calendar, icon: "calendar.badge.clock", title: "Calendar") }
+    private var trashRow: some View { auxScreenRow(.trash, icon: "trash", title: "Trash", trailingCount: trashCount) }
+    private var historyRow: some View { auxScreenRow(.history, icon: "clock", title: "History") }
+    private var spacesRow: some View { auxScreenRow(.spaces, icon: "square.3.layers.3d", title: "Spaces") }
 
     private func section(title: String, category: PARAWorkbenchView.Category, dotColor: Color, nodes: [CachedNode]) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Button {
                 selectedLens = nil
                 openNode = nil
-                showTrash = false
-                showHistory = false
-                showSpaces = false
+                auxScreen = nil
                 workbenchCategory = category
             } label: {
                 HStack(spacing: Space.xs) {
@@ -402,12 +385,7 @@ private struct Sidebar: View {
         return Button {
             selectedLens = nil
             workbenchCategory = nil
-            showTrash = false
-            showHistory = false
-            showSpaces = false
-            showDailyNote = false
-            showReadingList = false
-            showMusicIdeas = false
+            auxScreen = nil
             openNode = node
         } label: {
             Text(titleFor(node))
@@ -442,76 +420,6 @@ private struct Sidebar: View {
         }
         .padding(Space.sm)
         .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
-    }
-
-    private var trashRow: some View {
-        Button {
-            selectedLens = nil
-            workbenchCategory = nil
-            openNode = nil
-            showTrash = true
-            showHistory = false
-            showSpaces = false
-            showSpaces = false
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: "trash").font(.system(size: 12))
-                Text("Trash").font(Typography.bodySans())
-                Spacer()
-                Text("\(trashCount)").font(Typography.caption())
-            }
-            .foregroundStyle(showTrash ? c.accentDefault : c.textPrimary)
-            .padding(Space.sm)
-            .background(showTrash ? c.bgSelected : Color.clear)
-            .overlay(alignment: .leading) {
-                if showTrash { Rectangle().fill(c.accentDefault).frame(width: 2) }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var historyRow: some View {
-        Button {
-            selectedLens = nil
-            workbenchCategory = nil
-            openNode = nil
-            showTrash = false
-            showHistory = true
-            showSpaces = false
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: "clock").font(.system(size: 12))
-                Text("History").font(Typography.bodySans())
-                Spacer()
-            }
-            .foregroundStyle(showHistory ? c.accentDefault : c.textPrimary)
-            .padding(Space.sm)
-            .background(showHistory ? c.bgSelected : Color.clear)
-            .overlay(alignment: .leading) {
-                if showHistory { Rectangle().fill(c.accentDefault).frame(width: 2) }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var spacesRow: some View {
-        Button {
-            selectedLens = nil; workbenchCategory = nil; openNode = nil
-            showTrash = false; showHistory = false; showSpaces = true
-        } label: {
-            HStack(spacing: Space.sm) {
-                Image(systemName: "square.3.layers.3d").font(.system(size: 12))
-                Text("Spaces").font(Typography.bodySans())
-                Spacer()
-            }
-            .foregroundStyle(showSpaces ? c.accentDefault : c.textPrimary)
-            .padding(Space.sm).background(showSpaces ? c.bgSelected : Color.clear)
-            .overlay(alignment: .leading) { if showSpaces { Rectangle().fill(c.accentDefault).frame(width: 2) } }
-            .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        }
-        .buttonStyle(.plain)
     }
 
     private func reload() {
