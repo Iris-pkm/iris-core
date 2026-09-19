@@ -1,29 +1,22 @@
 // swift-tools-version:5.9
-import Foundation
 import PackageDescription
 
-// ponytail: linking directly against iris-core's freshly-`cargo build`-ed
-// debug dylib is a dev-loop shortcut, not a distributable build — before
-// packaging a real .app, replace this with an XCFramework (`cargo build
-// --release` + `xcodebuild -create-xcframework`) so the binary isn't tied
-// to a `cargo build` having already been run in this checkout.
-// Resolved relative to this file (repo-root/apps/macos/Package.swift), so
-// it works from any checkout/worktree, not just the one it was written in.
-let rustTargetDir = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent() // Package.swift -> apps/macos/
-    .deletingLastPathComponent() // -> apps/
-    .deletingLastPathComponent() // -> repo root
-    .appendingPathComponent("target/debug")
-    .path
-
+// IrisCoreFFI.xcframework wraps the release iris-core dylib (install name
+// fixed to @rpath, ad-hoc signed) plus its UniFFI-generated C header —
+// built via `cargo build --release --lib` + `xcodebuild -create-xcframework`
+// (see README.md's "Rebuilding the XCFramework" section for the exact
+// commands). Distributable: this checkout doesn't need a prior `cargo
+// build` to have been run, unlike the old raw -L/-liris_core dev-loop hack.
+// Ceiling, flagged: macos-arm64 only (this dev machine's architecture) —
+// a universal/x86_64 slice needs building on or cross-compiling for Intel,
+// tracked separately as part of ADR-029's five-target-triple pipeline.
 let package = Package(
     name: "Iris",
     platforms: [.macOS(.v14)],
     targets: [
-        // Wraps iris-core's UniFFI-generated C header so Swift can see it.
-        .systemLibrary(
+        .binaryTarget(
             name: "iris_coreFFI",
-            path: "Sources/iris_coreFFI"
+            path: "IrisCoreFFI.xcframework"
         ),
         // The UniFFI-generated Swift bindings (FfiEngine, FfiNode, etc.) —
         // regenerate via `cargo run --bin uniffi-bindgen` in iris-core
@@ -31,14 +24,7 @@ let package = Package(
         .target(
             name: "IrisCore",
             dependencies: ["iris_coreFFI"],
-            path: "Sources/IrisCore",
-            linkerSettings: [
-                .unsafeFlags([
-                    "-L", rustTargetDir,
-                    "-liris_core",
-                    "-Xlinker", "-rpath", "-Xlinker", rustTargetDir,
-                ])
-            ]
+            path: "Sources/IrisCore"
         ),
         .executableTarget(
             name: "Iris",

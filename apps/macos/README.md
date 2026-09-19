@@ -4,40 +4,54 @@ Native macOS shell, per ADR-031 (no webview). Consumes `iris-core` directly thro
 
 ## Build & run
 
-1. Build the Rust side first (from the repo root):
-   ```bash
-   cd iris-core && cargo build
-   ```
-2. Then build/run the app:
-   ```bash
-   cd apps/macos && swift build
-   swift run Iris
-   ```
-
-`Package.swift` links against `<repo-root>/target/debug/libiris_core.dylib` — resolved relative to `Package.swift`'s own location, so this works from any checkout or worktree. **You must `cargo build` the Rust side after any `iris-core` change** — `swift build` doesn't know to rebuild the Rust dependency for you.
-
-## Regenerating the Swift bindings
-
-Whenever `iris-core/src/ffi.rs`'s exported surface changes (a new `FfiEngine` method, a new DTO, etc.), regenerate:
-
 ```bash
-cd iris-core
-cargo build --lib
-cargo run --bin uniffi-bindgen -- generate --library ../target/debug/libiris_core.dylib --language swift --out-dir /tmp/iris-swift-gen
-cp /tmp/iris-swift-gen/iris_core.swift ../apps/macos/Sources/IrisCore/
-cp /tmp/iris-swift-gen/iris_coreFFI.h ../apps/macos/Sources/iris_coreFFI/
+cd apps/macos && swift build
+swift run Iris
 ```
 
-`Sources/IrisCore/iris_core.swift` and `Sources/iris_coreFFI/iris_coreFFI.h` are **generated files — never hand-edit them.** `Sources/iris_coreFFI/module.modulemap` is hand-written (points at the generated header) and doesn't need regenerating.
+No prior `cargo build` needed — `IrisCoreFFI.xcframework` (checked in) already carries a built `iris-core` release dylib plus its C header. **After any `iris-core` change**, rebuild the xcframework (below) before `swift build` will pick it up; there's no automatic dependency from Swift's build graph back to the Rust source.
+
+## Rebuilding the XCFramework
+
+Whenever `iris-core`'s Rust source changes (not just the FFI surface — any change needs a fresh dylib):
+
+```bash
+# 1. Build the release dylib
+cd iris-core && cargo build --release --lib
+
+# 2. Fix its install name so it's relocatable (Rust's default is an absolute
+#    build-machine path, which breaks the moment this leaves this checkout)
+#    and ad-hoc sign it (unsigned dylibs won't load into a signed app).
+cp ../target/release/libiris_core.dylib /tmp/libiris_core.dylib
+install_name_tool -id @rpath/libiris_core.dylib /tmp/libiris_core.dylib
+codesign --sign - --force /tmp/libiris_core.dylib
+
+# 3. Regenerate the Swift bindings + C header from that same dylib.
+cargo run --release --bin uniffi-bindgen -- generate \
+  --library /tmp/libiris_core.dylib --language swift --out-dir /tmp/iris-swift-gen
+cp /tmp/iris-swift-gen/iris_core.swift ../apps/macos/Sources/IrisCore/
+
+# 4. Stage headers (the generated modulemap must be named exactly
+#    `module.modulemap` for Clang to find it) and rebuild the xcframework.
+mkdir -p /tmp/iris-xcframework-headers
+cp /tmp/iris-swift-gen/iris_coreFFI.h /tmp/iris-xcframework-headers/
+cp /tmp/iris-swift-gen/iris_coreFFI.modulemap /tmp/iris-xcframework-headers/module.modulemap
+rm -rf ../apps/macos/IrisCoreFFI.xcframework
+xcodebuild -create-xcframework \
+  -library /tmp/libiris_core.dylib -headers /tmp/iris-xcframework-headers \
+  -output ../apps/macos/IrisCoreFFI.xcframework
+```
+
+`Sources/IrisCore/iris_core.swift` is a **generated file — never hand-edit it.** The xcframework's own header/modulemap (inside `IrisCoreFFI.xcframework/macos-arm64/Headers/`) are likewise generated, not hand-maintained.
+
+**Ceiling, flagged:** the xcframework currently has only a `macos-arm64` slice (this dev machine's architecture) — a universal/Intel build needs step 1 run on (or cross-compiled for) x86_64 and merged in via a second `-library`/`-headers` pair on the same `-create-xcframework` invocation. Tracked as part of ADR-029's five-target-triple pipeline, not a regression introduced here.
 
 ## Structure
 
-- `Sources/iris_coreFFI/` — a `.systemLibrary` target wrapping the generated C header, so Swift can see the raw FFI functions.
+- `IrisCoreFFI.xcframework/` — checked-in binary artifact: the release `iris-core` dylib (relocatable, ad-hoc signed) plus its UniFFI-generated C header, wrapped as a `.binaryTarget` in `Package.swift`. Replaces the old dev-loop hack of linking directly against a freshly-`cargo build`-ed debug dylib by absolute path.
 - `Sources/IrisCore/` — the generated Swift bindings (`FfiEngine`, `FfiNode`, `FfiRecurrence`, etc.) — the actual Swift-friendly API.
 - `Sources/Iris/` — the real app: `IrisApp.swift` (entry point), `Theme.swift` (mirrors `design/tokens.md` exactly — colors/spacing/type as Swift values), `Screens/` (one file per screen from `design/navigation.md`).
 
 ## Design reference
 
 Every screen here should match `design/DESIGN_RULES.md` + `design/tokens.md` + `design/components.md` + `design/navigation.md` + `design/screen-flow.md`, and the corresponding `design/canvas/*.dc.html` / `design/screens/*.png` for that screen. See `design/screen-flow.md` §5 for which screens are this builder's ("Claude Code, Core Workflows") vs. Codex's ("App Surfaces & Domains").
-
-**Known simplification (ponytail):** `Package.swift` links against a debug dylib by absolute-relative path, not a distributable `.xcframework`. Fine for local dev; must change before this ships as an actual `.app` — see the comment in `Package.swift`.
