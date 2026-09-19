@@ -137,7 +137,21 @@ struct OnboardingView: View {
         HStack(spacing: Space.md) {
             ForEach(OnboardingPath.allCases) { path in
                 OnboardingCard(path: path, isSelected: selected == path, colors: c) {
-                    selected = (selected == path) ? nil : path
+                    switch path {
+                    case .create:
+                        // No inline panel for this card — the mockup's
+                        // "Create" click goes straight to a folder picker,
+                        // unlike Import/Restore which reveal more choices
+                        // first. Toggling `selected` alone (the previous
+                        // behavior) never called anything — a real bug,
+                        // not a `selected == .create` panel that was
+                        // merely unbuilt.
+                        handleCreate()
+                    case .open:
+                        handleOpen()
+                    case .import, .restore:
+                        selected = (selected == path) ? nil : path
+                    }
                 }
             }
         }
