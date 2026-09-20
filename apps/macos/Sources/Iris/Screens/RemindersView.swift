@@ -33,6 +33,7 @@ struct RemindersView: View {
                     .contentShape(Rectangle())
 
                 section("UPCOMING", items: upcoming, empty: "No reminders are scheduled. Add one when you want Iris to ask the OS to notify you.")
+                if !past.isEmpty { section("PAST — NOT CONFIRMED DELIVERED", items: past, empty: "") }
                 if !recent.isEmpty { section("RECENT", items: recent, empty: "") }
                 Spacer()
             }
@@ -59,12 +60,17 @@ struct RemindersView: View {
     }
 
     private func row(_ reminder: Reminder) -> some View {
-        HStack(spacing: Space.md) {
-            Image(systemName: reminder.isRecent ? "checkmark" : "clock")
+        let (icon, iconColor, iconTint) = reminder.isRecent
+            ? ("checkmark", c.success, c.successTint)
+            : reminder.isPast
+                ? ("questionmark", c.warning, c.warningTint)
+                : ("clock", c.accentDefault, c.accentTint)
+        return HStack(spacing: Space.md) {
+            Image(systemName: icon)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(reminder.isRecent ? c.success : c.accentDefault)
+                .foregroundStyle(iconColor)
                 .frame(width: 24, height: 24)
-                .background(reminder.isRecent ? c.successTint : c.accentTint)
+                .background(iconTint)
                 .clipShape(Circle())
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(reminder.title)
@@ -91,6 +97,7 @@ struct RemindersView: View {
             Divider().background(c.borderDefault)
             Text("THIS WEEK").font(Typography.caption()).foregroundStyle(c.textSecondary)
             metric("Upcoming", upcoming.count)
+            metric("Past, unconfirmed", past.count)
             metric("Fired or dismissed", recent.count)
             Spacer()
         }
@@ -126,9 +133,15 @@ struct RemindersView: View {
         .background(c.bgSurfaceRaised)
     }
 
-    private var upcoming: [Reminder] {
-        reminders.filter { !$0.isRecent && ($0.fireDate ?? .distantPast) >= Date() }
-    }
+    private var upcoming: [Reminder] { reminders.filter { !$0.isRecent && $0.isUpcoming } }
+    /// Scheduled, its fire time has passed (or no fire time was ever
+    /// recorded), but nothing ever transitioned its status to "fired"/
+    /// "dismissed" — this app never claims delivery without OS evidence
+    /// (see the file's own doc comment), so these aren't shown as
+    /// "recent" either. Without this bucket a reminder would silently
+    /// vanish from every section the moment its time passed, even though
+    /// the node still exists.
+    private var past: [Reminder] { reminders.filter { !$0.isRecent && !$0.isUpcoming } }
     private var recent: [Reminder] { reminders.filter(\.isRecent) }
 
     private func load() {
@@ -174,10 +187,18 @@ struct RemindersView: View {
         let node: FfiNode
         var fireDate: Date? { node.fireAt.flatMap { ISO8601DateFormatter().date(from: $0) } }
         var isRecent: Bool { ["fired", "dismissed"].contains((node.reminderStatus ?? "").lowercased()) }
+        /// Still scheduled (not fired/dismissed) with a real fire time at or
+        /// after now. A reminder with no recorded fire time, or whose fire
+        /// time has already passed, is `isPast` instead — never both, and
+        /// never neither, so every non-recent reminder lands in exactly
+        /// one of `upcoming`/`past`.
+        var isUpcoming: Bool { fireDate.map { $0 >= Date() } ?? false }
+        var isPast: Bool { !isRecent && !isUpcoming }
         var title: String { node.reminderText ?? (path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
         var detail: String {
             guard let fireDate else { return "No delivery time recorded" }
             if isRecent { return "\(node.reminderStatus?.capitalized ?? "Handled") · \(fireDate.formatted(date: .abbreviated, time: .shortened))" }
+            if isPast { return "Was due \(fireDate.formatted(date: .abbreviated, time: .shortened)) — not confirmed delivered" }
             return fireDate.formatted(date: .abbreviated, time: .shortened)
         }
     }
