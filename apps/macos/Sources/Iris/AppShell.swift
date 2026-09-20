@@ -59,6 +59,15 @@ struct AppShell: View {
     @State private var auxScreen: AuxScreen?
     @State private var activeSpaceID: String?
     @State private var recentCaptures: [CaptureItem] = []
+    /// Graph (Phase 6, pulled forward at the user's explicit request — see
+    /// `GraphView`'s own doc comment) is a full replacement, not a sibling
+    /// selection or an overlay — `screen-flow.md`'s own note: "treat as
+    /// full replace regardless." Centered on whatever node is currently
+    /// open; the sidebar's "Open graph" button and ⌘G are both disabled
+    /// (shown, not hidden — same honest-disabled pattern as Onboarding's
+    /// unbuilt import sources) when nothing is open, rather than silently
+    /// doing nothing on click.
+    @State private var showGraph = false
 
     init(engine: FfiEngine, initialLens: TaskLens? = nil) {
         self.engine = engine
@@ -66,6 +75,17 @@ struct AppShell: View {
     }
 
     var body: some View {
+        if showGraph, let openNode {
+            GraphView(
+                engine: engine, centerNode: openNode,
+                onOpenNode: { node in
+                    showGraph = false
+                    self.openNode = node
+                },
+                onBack: { showGraph = false }
+            )
+            .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+        } else {
         ZStack {
             HStack(spacing: 0) {
                 Sidebar(
@@ -74,7 +94,8 @@ struct AppShell: View {
                     selectedLens: $selectedLens,
                     workbenchCategory: $workbenchCategory,
                     auxScreen: $auxScreen,
-                    showSearch: { showSearch = true }
+                    showSearch: { showSearch = true },
+                    showGraph: { showGraph = true }
                 )
                 Divider().background(c.borderDefault)
 
@@ -120,9 +141,16 @@ struct AppShell: View {
                 .opacity(0)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
+
+            Button("", action: { if openNode != nil { showGraph = true } })
+                .keyboardShortcut("g", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
         .background(c.bgCanvas)
         .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+        }
     }
 
     @ViewBuilder
@@ -217,6 +245,7 @@ private struct Sidebar: View {
     @Binding var workbenchCategory: PARAWorkbenchView.Category?
     @Binding var auxScreen: AuxScreen?
     let showSearch: () -> Void
+    let showGraph: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -416,15 +445,26 @@ private struct Sidebar: View {
         (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
     }
 
+    /// Real now (Graph was pulled forward from Phase 6) — but only when a
+    /// node is open, since the graph needs a center. Shown disabled rather
+    /// than hidden when nothing's open, same honest-disabled pattern as
+    /// Onboarding's unbuilt import sources, rather than a click that
+    /// silently does nothing.
     private var graphButton: some View {
-        HStack(spacing: Space.sm) {
-            Image(systemName: "circle.grid.cross").font(.system(size: 12)).foregroundStyle(c.textSecondary)
-            Text("Open graph").font(Typography.bodySmall()).foregroundStyle(c.textPrimary)
-            Spacer()
-            Text("⌘G").font(Typography.caption()).foregroundStyle(c.textDisabled)
+        Button(action: showGraph) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "circle.grid.cross").font(.system(size: 12))
+                Text("Open graph").font(Typography.bodySmall())
+                Spacer()
+                Text("⌘G").font(Typography.caption()).foregroundStyle(c.textDisabled)
+            }
+            .foregroundStyle(openNode == nil ? c.textDisabled : c.textPrimary)
+            .padding(Space.sm)
+            .contentShape(Rectangle())
+            .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
         }
-        .padding(Space.sm)
-        .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
+        .buttonStyle(.plain)
+        .disabled(openNode == nil)
     }
 
     private func reload() {
