@@ -86,6 +86,8 @@ struct ProjectView: View {
                     showTasks = true
                 } label: {
                     Text("Tasks \u{2192}").font(Typography.bodySmall()).foregroundStyle(c.accentDefault)
+                        .padding(.vertical, Space.xxs)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -126,6 +128,7 @@ struct ProjectView: View {
                 .padding(.vertical, Space.xs)
                 .background(isActive ? c.bgSurfaceRaised : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -162,6 +165,7 @@ struct ProjectView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 card(
                     "Blocked tasks", count: environment.blockedTasks.count, countColor: c.danger,
                     rows: environment.blockedTasks.map {

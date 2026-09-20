@@ -199,6 +199,7 @@ struct TaskLensRow<Trailing: View>: View {
                         }
                     }
                 }
+                .contentShape(Rectangle())
                 .buttonStyle(.plain)
             }
 
@@ -213,6 +214,7 @@ struct TaskLensRow<Trailing: View>: View {
                     Text(meta).font(Typography.caption()).foregroundStyle(c.textSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(onOpen == nil)

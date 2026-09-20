@@ -82,6 +82,7 @@ struct UpcomingView: View {
                         .padding(.vertical, Space.xs)
                         .background(window == w ? c.bgSurfaceRaised : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

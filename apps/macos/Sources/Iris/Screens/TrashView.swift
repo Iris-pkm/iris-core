@@ -76,6 +76,8 @@ struct TrashView: View {
                 .buttonStyle(.plain)
                 .font(Typography.bodySans())
                 .foregroundStyle(c.accentDefault)
+                .padding(.vertical, Space.xs)
+                .contentShape(Rectangle())
         }
         .padding(.vertical, Space.md)
         .overlay(alignment: .bottom) { Divider().background(c.borderDefault) }

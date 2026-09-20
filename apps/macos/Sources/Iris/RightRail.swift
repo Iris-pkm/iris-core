@@ -54,6 +54,7 @@ struct RightRail: View {
                 .padding(.vertical, Space.xs)
                 .background(isActive ? c.bgSelected : Color.clear)
                 .clipShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }

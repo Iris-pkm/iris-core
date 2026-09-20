@@ -67,6 +67,8 @@ struct DistillationQueueView: View {
         HStack(spacing: Space.xs) {
             Button(action: onBack) {
                 Text(projectTitle).font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
+                    .padding(.vertical, Space.xxs)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Text("/").foregroundStyle(c.textDisabled)
@@ -94,6 +96,7 @@ struct DistillationQueueView: View {
                 .padding(.vertical, Space.xs)
                 .background(isActive ? c.bgSurfaceRaised : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

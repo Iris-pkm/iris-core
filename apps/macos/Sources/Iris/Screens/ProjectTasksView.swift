@@ -77,6 +77,8 @@ struct ProjectTasksView: View {
         HStack(spacing: Space.xs) {
             Button(action: onBack) {
                 Text(projectTitle).font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
+                    .padding(.vertical, Space.xxs)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Text("/").foregroundStyle(c.textDisabled)
@@ -114,6 +116,7 @@ struct ProjectTasksView: View {
                     checkboxView(checked: task.status == "done")
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
 
             Button {
@@ -124,6 +127,7 @@ struct ProjectTasksView: View {
                     .foregroundStyle(task.status == "done" ? c.textSecondary : c.textPrimary)
                     .strikethrough(task.status == "done" && !isParent)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 

@@ -138,6 +138,7 @@ struct PARAWorkbenchView: View {
                 .padding(.vertical, Space.xs)
                 .background(mode == target ? c.bgSurfaceRaised : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -167,6 +168,7 @@ struct PARAWorkbenchView: View {
                     }
                     .padding(.vertical, Space.md)
                     .overlay(alignment: .bottom) { Rectangle().fill(c.borderDefault).frame(height: 1) }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -215,6 +217,7 @@ struct PARAWorkbenchView: View {
                     }
                     .padding(Space.sm)
                     .overlay(alignment: .bottom) { Rectangle().fill(c.borderDefault).frame(height: 1) }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -267,6 +270,7 @@ struct PARAWorkbenchView: View {
                                 .background(c.bgCanvas)
                                 .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(c.borderDefault, lineWidth: 1))
                                 .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }

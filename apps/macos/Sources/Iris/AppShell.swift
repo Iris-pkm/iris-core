@@ -289,6 +289,7 @@ private struct Sidebar: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -310,6 +311,7 @@ private struct Sidebar: View {
             .background(c.bgHover)
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
             .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .keyboardShortcut("k", modifiers: .command)
@@ -342,6 +344,7 @@ private struct Sidebar: View {
                 if isActive { Rectangle().fill(c.accentDefault).frame(width: 2) }
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -368,6 +371,7 @@ private struct Sidebar: View {
                 }
                 .padding(.bottom, Space.xs)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -400,6 +404,7 @@ private struct Sidebar: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

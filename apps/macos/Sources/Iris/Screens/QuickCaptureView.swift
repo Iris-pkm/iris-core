@@ -83,6 +83,8 @@ struct QuickCaptureView: View {
                     .font(Typography.bodySmall())
                     .foregroundStyle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? c.textDisabled : c.textPrimary)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding(.vertical, Space.xs)
+                    .contentShape(Rectangle())
 
                 keyHint("⌘↵")
                 Text("save & file to project")

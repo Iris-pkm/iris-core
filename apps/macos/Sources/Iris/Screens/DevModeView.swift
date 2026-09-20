@@ -55,6 +55,7 @@ struct DevModeView: View {
                 .frame(maxWidth: .infinity)
                 .padding(Space.sm)
                 .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(c.borderDefault, lineWidth: 1))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

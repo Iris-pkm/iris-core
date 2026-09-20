@@ -29,6 +29,8 @@ struct RemindersView: View {
                     .buttonStyle(.plain)
                     .font(Typography.sans(14, weight: .medium))
                     .foregroundStyle(c.accentDefault)
+                    .padding(.vertical, Space.xs)
+                    .contentShape(Rectangle())
 
                 section("UPCOMING", items: upcoming, empty: "No reminders are scheduled. Add one when you want Iris to ask the OS to notify you.")
                 if !recent.isEmpty { section("RECENT", items: recent, empty: "") }
