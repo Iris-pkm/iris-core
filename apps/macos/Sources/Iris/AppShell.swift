@@ -68,6 +68,14 @@ struct AppShell: View {
     /// unbuilt import sources) when nothing is open, rather than silently
     /// doing nothing on click.
     @State private var showGraph = false
+    /// Timeline (Phase 3, pulled forward alongside Graph — see
+    /// `TimelineView`'s own doc comment) is the same full-replacement
+    /// treatment as Graph, for the same reason: its own mockup has no
+    /// PARA/nav sidebar, just a bespoke critical-path toggle and legend.
+    /// Unlike Graph it needs no center node, so it's reachable
+    /// unconditionally from a standing sidebar row — this also resolves
+    /// `screen-flow.md`'s flagged "entry trigger TBD" for this screen.
+    @State private var showTimeline = false
 
     init(engine: FfiEngine, initialLens: TaskLens? = nil) {
         self.engine = engine
@@ -85,6 +93,16 @@ struct AppShell: View {
                 onBack: { showGraph = false }
             )
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
+        } else if showTimeline {
+            TimelineView(
+                engine: engine,
+                onOpenNode: { node in
+                    showTimeline = false
+                    openNode = node
+                },
+                onBack: { showTimeline = false }
+            )
+            .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
         } else {
         ZStack {
             HStack(spacing: 0) {
@@ -95,7 +113,8 @@ struct AppShell: View {
                     workbenchCategory: $workbenchCategory,
                     auxScreen: $auxScreen,
                     showSearch: { showSearch = true },
-                    showGraph: { showGraph = true }
+                    showGraph: { showGraph = true },
+                    showTimeline: { showTimeline = true }
                 )
                 Divider().background(c.borderDefault)
 
@@ -246,6 +265,7 @@ private struct Sidebar: View {
     @Binding var auxScreen: AuxScreen?
     let showSearch: () -> Void
     let showGraph: () -> Void
+    let showTimeline: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -267,6 +287,7 @@ private struct Sidebar: View {
             readingListRow
             musicIdeasRow
             calendarRow
+            timelineRow
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(TaskLens.allCases) { lens in
@@ -443,6 +464,24 @@ private struct Sidebar: View {
     /// stand-in `search.rs` already uses.
     private func titleFor(_ node: CachedNode) -> String {
         (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+    }
+
+    /// Timeline was pulled forward from Phase 3 alongside Graph — resolves
+    /// `screen-flow.md`'s flagged "entry trigger TBD" for this screen.
+    /// Unconditionally enabled (unlike Graph, a project timeline needs no
+    /// single center node).
+    private var timelineRow: some View {
+        Button(action: showTimeline) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "chart.bar.xaxis").font(.system(size: 12))
+                Text("Timeline").font(Typography.bodySans())
+                Spacer()
+            }
+            .foregroundStyle(c.textPrimary)
+            .padding(Space.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Real now (Graph was pulled forward from Phase 6) — but only when a
