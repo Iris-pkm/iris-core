@@ -7,14 +7,16 @@
 use std::path::Path;
 
 use rusqlite::Connection;
+use serde::Serialize;
 
 use crate::error::{IrisError, IrisResult};
 use crate::vault::Vault;
 
 /// A derived cache row for one node — enough to prove the cache reflects the
 /// vault and to power basic task-view queries (ARCHITECTURE.md §12); richer
-/// queries (search, full relation lookups) build on this later.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+/// queries (search, full relation lookups) build on this later. `Serialize`
+/// is for `iris-cli`'s `--json` output, not consumed inside `iris-core` itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, uniffi::Record)]
 pub struct CachedNode {
     pub id: String,
     pub node_type: String,
