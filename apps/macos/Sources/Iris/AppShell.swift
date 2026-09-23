@@ -12,7 +12,7 @@ import IrisCore
 /// structurally impossible, matching how `selectedLens`/`workbenchCategory`
 /// already work.
 fileprivate enum AuxScreen {
-    case trash, history, spaces, dailyNote, readingList, musicIdeas, calendar
+    case trash, history, spaces, dailyNote, readingList, musicIdeas, calendar, plugins
 }
 
 /// The persistent three-pane shell (`design/navigation.md` §1): sidebar +
@@ -182,6 +182,7 @@ struct AppShell: View {
         case .history: HistoryView(engine: engine)
         case .trash: TrashView(engine: engine)
         case .calendar: CalendarView(engine: engine)
+        case .plugins: PluginsView(engine: engine)
         }
     }
 
@@ -306,6 +307,7 @@ private struct Sidebar: View {
             trashRow
             historyRow
             spacesRow
+            pluginsRow
 
             Spacer()
             graphButton
@@ -406,6 +408,7 @@ private struct Sidebar: View {
     private var trashRow: some View { auxScreenRow(.trash, icon: "trash", title: "Trash", trailingCount: trashCount) }
     private var historyRow: some View { auxScreenRow(.history, icon: "clock", title: "History") }
     private var spacesRow: some View { auxScreenRow(.spaces, icon: "square.3.layers.3d", title: "Spaces") }
+    private var pluginsRow: some View { auxScreenRow(.plugins, icon: "puzzlepiece.extension", title: "Plugins") }
 
     private func section(title: String, category: PARAWorkbenchView.Category, dotColor: Color, nodes: [CachedNode]) -> some View {
         VStack(alignment: .leading, spacing: 1) {

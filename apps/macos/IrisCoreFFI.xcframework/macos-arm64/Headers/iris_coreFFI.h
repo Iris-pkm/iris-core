@@ -378,6 +378,11 @@ RustBuffer uniffi_iris_core_fn_method_ffiengine_import_obsidian_vault(uint64_t p
 RustBuffer uniffi_iris_core_fn_method_ffiengine_inbox(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_INSTALL_PLUGIN
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_INSTALL_PLUGIN
+RustBuffer uniffi_iris_core_fn_method_ffiengine_install_plugin(uint64_t ptr, RustBuffer bundle_dir, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 void uniffi_iris_core_fn_method_ffiengine_instantiate_template(uint64_t ptr, RustBuffer template_rel_path, RustBuffer new_rel_path, RustCallStatus *_Nonnull out_status
@@ -396,6 +401,11 @@ RustBuffer uniffi_iris_core_fn_method_ffiengine_list_branches(uint64_t ptr, Rust
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_LIST_CHECKPOINTS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_LIST_CHECKPOINTS
 RustBuffer uniffi_iris_core_fn_method_ffiengine_list_checkpoints(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_LIST_PLUGINS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_LIST_PLUGINS
+RustBuffer uniffi_iris_core_fn_method_ffiengine_list_plugins(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_LOG_POMODORO
@@ -448,6 +458,11 @@ void uniffi_iris_core_fn_method_ffiengine_reply_to_annotation(uint64_t ptr, Rust
 void uniffi_iris_core_fn_method_ffiengine_restore_node(uint64_t ptr, RustBuffer rel_path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_RUN_PLUGIN
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_RUN_PLUGIN
+RustBuffer uniffi_iris_core_fn_method_ffiengine_run_plugin(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SEARCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SEARCH
 RustBuffer uniffi_iris_core_fn_method_ffiengine_search(uint64_t ptr, RustBuffer query, RustBuffer node_type, RustBuffer domain, RustBuffer tag, RustCallStatus *_Nonnull out_status
@@ -461,6 +476,11 @@ void uniffi_iris_core_fn_method_ffiengine_set_annotation_resolved(uint64_t ptr, 
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 void uniffi_iris_core_fn_method_ffiengine_set_distillation_level(uint64_t ptr, RustBuffer rel_path, RustBuffer level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SET_PLUGIN_ENABLED
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SET_PLUGIN_ENABLED
+void uniffi_iris_core_fn_method_ffiengine_set_plugin_enabled(uint64_t ptr, RustBuffer id, int8_t enabled, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_SET_PROJECT_STATUS
@@ -970,6 +990,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_inbox(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTALL_PLUGIN
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTALL_PLUGIN
+uint16_t uniffi_iris_core_checksum_method_ffiengine_install_plugin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_INSTANTIATE_TEMPLATE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_instantiate_template(void
@@ -991,6 +1017,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_list_branches(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_CHECKPOINTS
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_CHECKPOINTS
 uint16_t uniffi_iris_core_checksum_method_ffiengine_list_checkpoints(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_PLUGINS
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_LIST_PLUGINS
+uint16_t uniffi_iris_core_checksum_method_ffiengine_list_plugins(void
     
 );
 #endif
@@ -1054,6 +1086,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_restore_node(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_RUN_PLUGIN
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_RUN_PLUGIN
+uint16_t uniffi_iris_core_checksum_method_ffiengine_run_plugin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SEARCH
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SEARCH
 uint16_t uniffi_iris_core_checksum_method_ffiengine_search(void
@@ -1069,6 +1107,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_set_annotation_resolved(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_DISTILLATION_LEVEL
 uint16_t uniffi_iris_core_checksum_method_ffiengine_set_distillation_level(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_PLUGIN_ENABLED
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_SET_PLUGIN_ENABLED
+uint16_t uniffi_iris_core_checksum_method_ffiengine_set_plugin_enabled(void
     
 );
 #endif
