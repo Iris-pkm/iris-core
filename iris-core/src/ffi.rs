@@ -510,6 +510,41 @@ impl From<crate::import::ImportReport> for FfiImportReport {
     }
 }
 
+/// `plugins::InstalledPlugin` flattened for the boundary — `PathBuf` (the
+/// install directory) has no UniFFI representation, same reason every
+/// other DTO in this module exists; the native shell has no use for that
+/// path anyway, only the plugin's own declared identity/permissions/state.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiPluginInfo {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub node_type_permissions: Vec<String>,
+    /// Declared, shown in the permission-disclosure UI — **not enforced or
+    /// usable** in v1. No host function exists yet for a plugin to
+    /// actually make a network call; real sandboxed network access is a
+    /// separate subsystem (ADR-034), deliberately out of this pass.
+    pub network_host_permissions: Vec<String>,
+    pub enabled: bool,
+}
+
+impl From<crate::plugins::InstalledPlugin> for FfiPluginInfo {
+    fn from(p: crate::plugins::InstalledPlugin) -> Self {
+        FfiPluginInfo {
+            id: p.manifest.id,
+            name: p.manifest.name,
+            version: p.manifest.version,
+            author: p.manifest.author,
+            description: p.manifest.description,
+            node_type_permissions: p.manifest.permissions.node_types,
+            network_host_permissions: p.manifest.permissions.network_hosts,
+            enabled: p.state.enabled,
+        }
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct FfiEngine {
     inner: Mutex<Engine>,
@@ -875,6 +910,44 @@ impl FfiEngine {
             &node_id,
         )?)
     }
+
+    // -- plugin runtime v1 (`plugins.rs`, ADR-034) --
+
+    pub fn list_plugins(&self) -> Result<Vec<FfiPluginInfo>, FfiEngineError> {
+        let guard = self.lock();
+        Ok(crate::plugins::list_plugins(guard.vault_root())?
+            .into_iter()
+            .map(FfiPluginInfo::from)
+            .collect())
+    }
+
+    /// `bundle_dir` is a local folder (author-provided `manifest.yaml` +
+    /// `plugin.wasm`) the native shell lets the user pick via a folder
+    /// picker — same "native side owns file selection" convention as
+    /// `import_markdown_folder`/`import_obsidian_vault`.
+    pub fn install_plugin(&self, bundle_dir: String) -> Result<FfiPluginInfo, FfiEngineError> {
+        let guard = self.lock();
+        let installed =
+            crate::plugins::install_plugin(guard.vault_root(), std::path::Path::new(&bundle_dir))?;
+        Ok(FfiPluginInfo::from(installed))
+    }
+
+    pub fn set_plugin_enabled(&self, id: String, enabled: bool) -> Result<(), FfiEngineError> {
+        let guard = self.lock();
+        Ok(crate::plugins::set_plugin_enabled(
+            guard.vault_root(),
+            &id,
+            enabled,
+        )?)
+    }
+
+    /// Runs the plugin's `plugin_run` once and returns everything it
+    /// logged via `host_log` — the native shell's proof, shown to the
+    /// user, that this actually executed rather than silently no-op-ing.
+    pub fn run_plugin(&self, id: String) -> Result<Vec<String>, FfiEngineError> {
+        let mut guard = self.lock();
+        Ok(crate::plugins::run_plugin(&mut guard, &id)?)
+    }
 }
 
 /// The git half of restore-from-backup can't be a constructor (see
@@ -1231,5 +1304,71 @@ mod tests {
             conns[0].direction,
             crate::connections::ConnectionDirection::Incoming
         );
+    }
+
+    #[test]
+    fn ffi_engine_installs_and_runs_a_plugin_end_to_end() {
+        let dir = TempDir::new("plugins-ffi");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+
+        // The same fixture `plugins.rs`'s own tests use, compiled fresh
+        // here too — this test is specifically proving the FFI boundary
+        // (DTOs, the `Arc<FfiEngine>` locking, UniFFI-exported signatures),
+        // not re-proving the sandbox itself.
+        let manifest_yaml = "\
+id: hello-world
+name: Hello World
+version: 0.1.0
+author: Iris
+description: FFI boundary test fixture.
+permissions:
+  node_types: [note]
+";
+        let wat = r#"
+            (module
+              (import "iris" "host_log" (func $log (param i32 i32)))
+              (import "iris" "host_create_node" (func $create (param i32 i32) (result i32)))
+              (memory (export "memory") 1)
+              (data (i32.const 0) "hi")
+              (data (i32.const 16) "rel_path: notes/via-ffi.md\nnode_type: note\nbody: made via FFI\n")
+              (func (export "plugin_run") (result i32)
+                (call $log (i32.const 0) (i32.const 2))
+                (call $create (i32.const 16) (i32.const 62))
+                drop
+                (i32.const 0))
+            )
+        "#;
+        let bundle_dir = TempDir::new("plugins-ffi-bundle");
+        std::fs::create_dir_all(bundle_dir.path()).unwrap();
+        std::fs::write(bundle_dir.path().join("manifest.yaml"), manifest_yaml).unwrap();
+        std::fs::write(
+            bundle_dir.path().join("plugin.wasm"),
+            wat::parse_str(wat).unwrap(),
+        )
+        .unwrap();
+
+        let info = engine
+            .install_plugin(bundle_dir.path().to_string_lossy().into_owned())
+            .unwrap();
+        assert_eq!(info.id, "hello-world");
+        assert!(info.enabled);
+        assert_eq!(info.node_type_permissions, vec!["note".to_string()]);
+
+        assert_eq!(engine.list_plugins().unwrap().len(), 1);
+
+        engine
+            .set_plugin_enabled("hello-world".to_string(), false)
+            .unwrap();
+        assert!(!engine.list_plugins().unwrap()[0].enabled);
+        assert!(engine.run_plugin("hello-world".to_string()).is_err());
+
+        engine
+            .set_plugin_enabled("hello-world".to_string(), true)
+            .unwrap();
+        let logs = engine.run_plugin("hello-world".to_string()).unwrap();
+        assert_eq!(logs, vec!["hi".to_string()]);
+
+        let created = engine.read_node("notes/via-ffi.md".to_string()).unwrap();
+        assert!(created.body.contains("made via FFI"));
     }
 }

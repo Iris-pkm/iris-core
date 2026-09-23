@@ -20,6 +20,7 @@ pub mod git;
 pub mod import;
 pub mod integrity;
 pub mod parser;
+pub mod plugins;
 pub mod recurrence;
 pub mod search;
 pub mod types;

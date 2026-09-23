@@ -1,0 +1,12 @@
+id: hello-world
+name: Hello World
+version: 0.1.0
+author: Iris
+description: >-
+  The reference example for Iris's plugin runtime v1 (ADR-034) — proves the
+  sandbox end to end: logs a message, then creates one real note in your
+  vault through the permission-checked host API. Install it via Plugins ->
+  Install... and pick this folder.
+permissions:
+  node_types: [note]
+  network_hosts: []

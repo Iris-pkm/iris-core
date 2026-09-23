@@ -24,3 +24,7 @@ typst-layout = "0.15"
 typst-pdf = "0.15"
 typst = "0.15"
 rrule = "0.14.0"
+wasmtime = "49.0.0"
+
+[dev-dependencies]
+wat = "1"
