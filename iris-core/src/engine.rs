@@ -136,6 +136,12 @@ impl Engine {
     ) -> IrisResult<()> {
         let rel_path = rel_path.as_ref();
         let before = self.capture_state(rel_path);
+        if matches!(before, UndoState::Existing { .. }) {
+            return Err(IrisError::Validation(format!(
+                "{} already exists",
+                rel_path.display()
+            )));
+        }
         self.write_node_raw(
             rel_path,
             node,
@@ -998,6 +1004,21 @@ mod tests {
         let reopened = Engine::open(dir.path()).unwrap();
         let cached = reopened.cache.list_nodes().unwrap();
         assert_eq!(cached.len(), 1);
+    }
+
+    #[test]
+    fn create_node_refuses_to_overwrite_an_existing_path() {
+        let dir = TempDir::new("create-overwrite");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n\nfirst\n")
+            .unwrap();
+        let err = engine
+            .create_node("notes/a.md", &sample_node(), "\n\nsecond\n")
+            .unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+        // The original content survives untouched.
+        assert_eq!(engine.read_node("notes/a.md").unwrap().body, "\n\nfirst\n");
     }
 
     #[test]
