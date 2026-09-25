@@ -22,6 +22,7 @@ struct NodeEditorView: View {
     @State private var linkedCount: Int = 0
     @State private var loadError: String?
     @State private var showExport = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ScrollView {
@@ -33,6 +34,8 @@ struct NodeEditorView: View {
                             .font(Typography.h1())
                             .foregroundStyle(c.textPrimary)
                         Spacer()
+                        Button("Open in New Window") { openWindow(value: relPath) }
+                            .buttonStyle(.bordered)
                         Button("Export…") { showExport = true }
                             .buttonStyle(.bordered)
                     }

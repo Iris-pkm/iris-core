@@ -53,6 +53,7 @@ private enum ImportSource: String, CaseIterable, Identifiable {
 }
 
 struct OnboardingView: View {
+    @EnvironmentObject private var session: VaultSession
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
@@ -66,6 +67,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             if let engine = readyEngine {
                 AppShell(engine: engine, initialLens: initialLens)
+                    .onAppear { session.engine = engine }
             } else {
                 content
             }
