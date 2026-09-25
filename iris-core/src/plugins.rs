@@ -286,55 +286,8 @@ pub fn run_plugin(engine: &mut Engine, plugin_id: &str) -> IrisResult<Vec<String
                 } else {
                     NodeType::Custom(req.node_type.clone())
                 };
-                let now = chrono::Utc::now();
-                let node = Node {
-                    id: crate::types::new_node_id(),
-                    node_type,
-                    created: now,
-                    modified: now,
-                    schema_version: crate::types::CURRENT_SCHEMA_VERSION,
-                    lifecycle: None,
-                    archived_at: None,
-                    domain: None,
-                    tags: vec![format!("plugin:{}", caller.data().plugin_id)],
-                    relations: vec![],
-                    deleted_at: None,
-                    is_template: false,
-                    distillation_level: None,
-                    status: None,
-                    priority: None,
-                    scheduled_date: None,
-                    due_date: None,
-                    estimated_pomodoros: None,
-                    actual_pomodoros: None,
-                    recurrence: None,
-                    recurrence_occurrences: None,
-                    checklist: vec![],
-                    start: None,
-                    end: None,
-                    external_id: None,
-                    project_status: None,
-                    start_date: None,
-                    target_date: None,
-                    source_url: None,
-                    read_status: None,
-                    reminder_text: None,
-                    fire_at: None,
-                    reminder_status: None,
-                    resolved: false,
-                    anchor: None,
-                    pinned: vec![],
-                    active_filter: None,
-                    default_view: None,
-                    theme: None,
-                    ink_attachment: None,
-                    date: None,
-                    symbol: None,
-                    entry: None,
-                    exit: None,
-                    pnl: None,
-                    r_multiple: None,
-                };
+                let mut node = Node::new(node_type);
+                node.tags = vec![format!("plugin:{}", caller.data().plugin_id)];
 
                 // SAFETY: see the doc comment on `PluginHost` — this
                 // pointer is derived from `run_plugin`'s own `&mut Engine`

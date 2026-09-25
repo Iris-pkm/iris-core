@@ -302,6 +302,68 @@ pub struct Node {
     // for; a dedicated field would just duplicate the body.
 }
 
+impl Node {
+    /// A minimal, valid node of the given type: a fresh id, `created`/
+    /// `modified` both set to now, `schema_version` current, every other
+    /// field empty/`None`. Callers set only the fields their node type
+    /// actually uses — this exists so `iris-cli`, the plugin host
+    /// (`plugins.rs`), and the MCP server don't each hand-write the same
+    /// ~40-field struct literal (three real, independent clients doing the
+    /// same "construct a fresh node" job is exactly the kind of duplication
+    /// worth collapsing into one constructor).
+    pub fn new(node_type: NodeType) -> Self {
+        let now = Utc::now();
+        Node {
+            id: new_node_id(),
+            node_type,
+            created: now,
+            modified: now,
+            schema_version: CURRENT_SCHEMA_VERSION,
+            lifecycle: None,
+            archived_at: None,
+            domain: None,
+            tags: vec![],
+            relations: vec![],
+            deleted_at: None,
+            is_template: false,
+            distillation_level: None,
+            status: None,
+            priority: None,
+            scheduled_date: None,
+            due_date: None,
+            estimated_pomodoros: None,
+            actual_pomodoros: None,
+            recurrence: None,
+            recurrence_occurrences: None,
+            checklist: vec![],
+            start: None,
+            end: None,
+            external_id: None,
+            project_status: None,
+            start_date: None,
+            target_date: None,
+            source_url: None,
+            read_status: None,
+            reminder_text: None,
+            fire_at: None,
+            reminder_status: None,
+            resolved: false,
+            anchor: None,
+            pinned: vec![],
+            active_filter: None,
+            default_view: None,
+            theme: None,
+            ink_attachment: None,
+            date: None,
+            symbol: None,
+            entry: None,
+            exit: None,
+            pnl: None,
+            r_multiple: None,
+        }
+    }
+}
+
 fn default_schema_version() -> u32 {
     CURRENT_SCHEMA_VERSION
 }
