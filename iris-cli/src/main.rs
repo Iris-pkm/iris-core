@@ -10,12 +10,12 @@ use std::io::Read as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{new_node_id, Node, NodeType, CURRENT_SCHEMA_VERSION};
+use iris_core::types::{new_node_id, Node, NodeType, Priority, CURRENT_SCHEMA_VERSION};
 
 #[derive(Parser)]
 #[command(name = "iris", version, about = "Scriptable client for an Iris vault")]
@@ -68,6 +68,47 @@ enum Command {
         #[arg(long)]
         tag: Option<String>,
     },
+    /// Update a node's metadata fields. Leaves the body untouched unless
+    /// --body is given — use `edit` to change the body interactively.
+    Update {
+        rel_path: String,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long = "clear-status")]
+        clear_status: bool,
+        /// urgent, high, normal, or low.
+        #[arg(long)]
+        priority: Option<String>,
+        #[arg(long = "clear-priority")]
+        clear_priority: bool,
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long = "clear-domain")]
+        clear_domain: bool,
+        /// YYYY-MM-DD.
+        #[arg(long = "scheduled-date")]
+        scheduled_date: Option<String>,
+        #[arg(long = "clear-scheduled-date")]
+        clear_scheduled_date: bool,
+        /// YYYY-MM-DD.
+        #[arg(long = "due-date")]
+        due_date: Option<String>,
+        #[arg(long = "clear-due-date")]
+        clear_due_date: bool,
+        /// Repeatable: --add-tag work --add-tag q3
+        #[arg(long = "add-tag")]
+        add_tags: Vec<String>,
+        /// Repeatable.
+        #[arg(long = "remove-tag")]
+        remove_tags: Vec<String>,
+        /// Replace the body outright (non-interactive). Use `edit` instead
+        /// to open $EDITOR on the current body.
+        #[arg(long)]
+        body: Option<String>,
+    },
+    /// Open $EDITOR (or $VISUAL) on a node's body and save it back on exit,
+    /// the same pattern `git commit` uses. Frontmatter is untouched.
+    Edit { rel_path: String },
     /// Mark a task done (or, if already done, reopen it — same toggle the
     /// task-lens views use).
     Done { rel_path: String },
@@ -108,6 +149,41 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             domain,
             tag,
         } => cmd_search(&cli.vault, query, node_type, domain, tag, cli.json),
+        Command::Update {
+            rel_path,
+            status,
+            clear_status,
+            priority,
+            clear_priority,
+            domain,
+            clear_domain,
+            scheduled_date,
+            clear_scheduled_date,
+            due_date,
+            clear_due_date,
+            add_tags,
+            remove_tags,
+            body,
+        } => cmd_update(
+            &cli.vault,
+            &rel_path,
+            UpdateFields {
+                status,
+                clear_status,
+                priority,
+                clear_priority,
+                domain,
+                clear_domain,
+                scheduled_date,
+                clear_scheduled_date,
+                due_date,
+                clear_due_date,
+                add_tags,
+                remove_tags,
+                body,
+            },
+        ),
+        Command::Edit { rel_path } => cmd_edit(&cli.vault, &rel_path),
         Command::Done { rel_path } => cmd_done(&cli.vault, &rel_path),
         Command::Rm { rel_path } => {
             let mut engine = Engine::open(&cli.vault)?;
@@ -254,5 +330,115 @@ fn cmd_done(vault: &PathBuf, rel_path: &str) -> Result<(), IrisError> {
     let mut engine = Engine::open(vault)?;
     engine.complete_task(rel_path)?;
     println!("Toggled {rel_path}");
+    Ok(())
+}
+
+struct UpdateFields {
+    status: Option<String>,
+    clear_status: bool,
+    priority: Option<String>,
+    clear_priority: bool,
+    domain: Option<String>,
+    clear_domain: bool,
+    scheduled_date: Option<String>,
+    clear_scheduled_date: bool,
+    due_date: Option<String>,
+    clear_due_date: bool,
+    add_tags: Vec<String>,
+    remove_tags: Vec<String>,
+    body: Option<String>,
+}
+
+fn parse_date(s: &str) -> Result<NaiveDate, IrisError> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map_err(|e| IrisError::Validation(format!("invalid date {s:?} (want YYYY-MM-DD): {e}")))
+}
+
+fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(), IrisError> {
+    let mut engine = Engine::open(vault)?;
+    let mut node = engine.read_node(rel_path)?.node;
+
+    if fields.clear_status {
+        node.status = None;
+    } else if let Some(s) = fields.status {
+        node.status = Some(s);
+    }
+
+    if fields.clear_priority {
+        node.priority = None;
+    } else if let Some(p) = fields.priority {
+        let priority: Priority = serde_yaml::from_str(&p)
+            .map_err(|e| IrisError::Validation(format!("invalid priority: {e}")))?;
+        node.priority = Some(priority);
+    }
+
+    if fields.clear_domain {
+        node.domain = None;
+    } else if let Some(d) = fields.domain {
+        node.domain = Some(d);
+    }
+
+    if fields.clear_scheduled_date {
+        node.scheduled_date = None;
+    } else if let Some(d) = fields.scheduled_date {
+        node.scheduled_date = Some(parse_date(&d)?);
+    }
+
+    if fields.clear_due_date {
+        node.due_date = None;
+    } else if let Some(d) = fields.due_date {
+        node.due_date = Some(parse_date(&d)?);
+    }
+
+    node.tags.retain(|t| !fields.remove_tags.contains(t));
+    for tag in fields.add_tags {
+        if !node.tags.contains(&tag) {
+            node.tags.push(tag);
+        }
+    }
+
+    match fields.body {
+        Some(b) => engine.update_node_with_body(rel_path, &node, &format!("\n{b}\n"))?,
+        None => engine.update_node(rel_path, &node)?,
+    }
+    println!("Updated {rel_path}");
+    Ok(())
+}
+
+fn cmd_edit(vault: &PathBuf, rel_path: &str) -> Result<(), IrisError> {
+    let mut engine = Engine::open(vault)?;
+    let parsed = engine.read_node(rel_path)?;
+
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .unwrap_or_else(|_| "vi".to_string());
+
+    let tmp_path = std::env::temp_dir().join(format!(
+        "iris-edit-{}-{}.md",
+        std::process::id(),
+        Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
+    std::fs::write(&tmp_path, &parsed.body)?;
+
+    let status = std::process::Command::new(&editor)
+        .arg(&tmp_path)
+        .status()
+        .map_err(|e| IrisError::Validation(format!("failed to launch {editor}: {e}")))?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(IrisError::Validation(format!(
+            "{editor} exited with {status}, not saving"
+        )));
+    }
+
+    let new_body = std::fs::read_to_string(&tmp_path)?;
+    let _ = std::fs::remove_file(&tmp_path);
+
+    if new_body == parsed.body {
+        println!("No changes.");
+        return Ok(());
+    }
+    engine.update_node_with_body(rel_path, &parsed.node, &new_body)?;
+    println!("Updated {rel_path}");
     Ok(())
 }

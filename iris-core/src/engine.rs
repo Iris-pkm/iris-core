@@ -426,18 +426,36 @@ impl Engine {
     /// editor in `parser.rs` that doesn't exist yet; this is a known, honest gap.
     pub fn update_node(&mut self, rel_path: impl AsRef<Path>, node: &Node) -> IrisResult<()> {
         let rel_path = rel_path.as_ref();
+        let existing_body = self.vault.read_node(rel_path)?.body;
+        self.update_node_with_body(rel_path, node, &existing_body)
+    }
+
+    /// Replace both a node's frontmatter and its body.
+    ///
+    /// `update_node` always keeps the existing body untouched, which is
+    /// right for pure metadata edits but leaves no way to change content —
+    /// this is the method anything that actually edits a note (an editor
+    /// UI, `iris-cli`'s `update --body`/`--edit`) needs instead. Same
+    /// frontmatter-re-serialization gap as `update_node` (ADR-019).
+    pub fn update_node_with_body(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        node: &Node,
+        body: &str,
+    ) -> IrisResult<()> {
+        let rel_path = rel_path.as_ref();
         let existing = self.vault.read_node(rel_path)?;
         self.push_undo(
             rel_path,
             UndoState::Existing {
                 node: Box::new(existing.node),
-                body: existing.body.clone(),
+                body: existing.body,
             },
         );
         self.write_node_raw(
             rel_path,
             node,
-            &existing.body,
+            body,
             &format!("Update {}", rel_path.display()),
         )
     }
@@ -1004,6 +1022,32 @@ mod tests {
         let reopened = Engine::open(dir.path()).unwrap();
         let cached = reopened.cache.list_nodes().unwrap();
         assert_eq!(cached.len(), 1);
+    }
+
+    #[test]
+    fn update_node_preserves_body_but_update_node_with_body_changes_it() {
+        let dir = TempDir::new("update-body");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let node = sample_node();
+        engine
+            .create_node("notes/a.md", &node, "\n\noriginal body\n")
+            .unwrap();
+
+        let mut updated = node.clone();
+        updated.domain = Some("trading".to_string());
+        engine.update_node("notes/a.md", &updated).unwrap();
+        assert_eq!(
+            engine.read_node("notes/a.md").unwrap().body,
+            "\n\noriginal body\n",
+            "update_node must never touch the body"
+        );
+
+        engine
+            .update_node_with_body("notes/a.md", &updated, "\n\nnew body\n")
+            .unwrap();
+        let after = engine.read_node("notes/a.md").unwrap();
+        assert_eq!(after.body, "\n\nnew body\n");
+        assert_eq!(after.node.domain.as_deref(), Some("trading"));
     }
 
     #[test]
