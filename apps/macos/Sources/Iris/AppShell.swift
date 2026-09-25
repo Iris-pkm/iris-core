@@ -104,7 +104,15 @@ struct AppShell: View {
             )
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 640, idealHeight: 800)
         } else {
-        ZStack {
+        // `.top`, not the default `.center`: without an explicit alignment,
+        // content taller than the window (easy to hit shrinking a window
+        // this small, especially with the sidebar's own row count) gets
+        // symmetrically overflow-clipped by SwiftUI — the top rows go
+        // above y=0 and vanish, which is the bug this fixes. Top-anchoring
+        // means any overflow is lost from the bottom instead, which is at
+        // least legible (title/search/nav stay visible) rather than the
+        // window silently hiding its own header content.
+        ZStack(alignment: .top) {
             HStack(spacing: 0) {
                 Sidebar(
                     engine: engine,
@@ -276,43 +284,54 @@ private struct Sidebar: View {
     @State private var lensCounts: [TaskLens: Int] = [:]
     @State private var trashCount = 0
 
+    // The standing-row count here has grown all session (Timeline, Plugins,
+    // both added on top of an already-long list) — past a certain window
+    // height, that fixed content genuinely no longer fits. Previously only
+    // the Projects/Areas/Resources section scrolled, so a short window made
+    // every row after it (Trash/History/Spaces/Plugins) inaccessible, and —
+    // combined with AppShell's un-anchored root ZStack — pushed the *top*
+    // rows off-screen too (see that fix's own comment). Now everything
+    // scrolls as one list, with the graph button pinned outside the scroll
+    // area so that one persistent affordance stays reachable regardless of
+    // window size.
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.lg) {
-            HStack(spacing: Space.sm) {
-                logo
-                Text("Iris").font(Typography.serif(15, weight: .semibold)).foregroundStyle(c.textPrimary)
-            }
-
-            searchBar
-            dailyNoteRow
-            readingListRow
-            musicIdeasRow
-            calendarRow
-            timelineRow
-
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(TaskLens.allCases) { lens in
-                    lensRow(lens)
-                }
-            }
-
+        VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
-                    section(title: "Projects", category: .projects, dotColor: c.warning, nodes: projects)
-                    section(title: "Areas", category: .areas, dotColor: c.success, nodes: areas)
-                    section(title: "Resources", category: .resources, dotColor: c.accentDefault, nodes: resources)
+                    HStack(spacing: Space.sm) {
+                        logo
+                        Text("Iris").font(Typography.serif(15, weight: .semibold)).foregroundStyle(c.textPrimary)
+                    }
+
+                    searchBar
+                    dailyNoteRow
+                    readingListRow
+                    musicIdeasRow
+                    calendarRow
+                    timelineRow
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(TaskLens.allCases) { lens in
+                            lensRow(lens)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: Space.lg) {
+                        section(title: "Projects", category: .projects, dotColor: c.warning, nodes: projects)
+                        section(title: "Areas", category: .areas, dotColor: c.success, nodes: areas)
+                        section(title: "Resources", category: .resources, dotColor: c.accentDefault, nodes: resources)
+                    }
+
+                    trashRow
+                    historyRow
+                    spacesRow
+                    pluginsRow
                 }
+                .padding(Space.md)
             }
-
-            trashRow
-            historyRow
-            spacesRow
-            pluginsRow
-
-            Spacer()
             graphButton
+                .padding(Space.md)
         }
-        .padding(Space.md)
         .frame(width: 236)
         .background(c.bgSurface)
         .task { reload() }
