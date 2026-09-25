@@ -6,6 +6,8 @@
 //! native GUI shells and the MCP server — not a special or lesser way to
 //! use Iris.
 
+mod mcp_server;
+
 use std::io::Read as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -15,7 +17,7 @@ use clap::{Parser, Subcommand};
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{new_node_id, Node, NodeType, Priority, CURRENT_SCHEMA_VERSION};
+use iris_core::types::{Node, NodeType, Priority};
 
 #[derive(Parser)]
 #[command(name = "iris", version, about = "Scriptable client for an Iris vault")]
@@ -116,6 +118,9 @@ enum Command {
     Rm { rel_path: String },
     /// Recover a soft-deleted node.
     Restore { rel_path: String },
+    /// Run an MCP server over stdio, exposing this vault to external agents
+    /// (search_notes, get_note, create_note, update_note).
+    McpServer,
 }
 
 fn main() -> ExitCode {
@@ -197,6 +202,11 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             println!("Restored {rel_path}");
             Ok(())
         }
+        Command::McpServer => {
+            let rt = tokio::runtime::Runtime::new().map_err(IrisError::Io)?;
+            rt.block_on(mcp_server::serve(cli.vault))
+                .map_err(|e| IrisError::Validation(e.to_string()))
+        }
     }
 }
 
@@ -226,55 +236,8 @@ fn cmd_create(
     // `---` with no newline inserted for you (see `engine.rs::render`).
     let body = format!("\n{body}\n");
 
-    let now = Utc::now();
-    let node = Node {
-        id: new_node_id(),
-        node_type,
-        created: now,
-        modified: now,
-        schema_version: CURRENT_SCHEMA_VERSION,
-        lifecycle: None,
-        archived_at: None,
-        domain: None,
-        tags,
-        relations: vec![],
-        deleted_at: None,
-        is_template: false,
-        distillation_level: None,
-        status: None,
-        priority: None,
-        scheduled_date: None,
-        due_date: None,
-        estimated_pomodoros: None,
-        actual_pomodoros: None,
-        recurrence: None,
-        recurrence_occurrences: None,
-        checklist: vec![],
-        start: None,
-        end: None,
-        external_id: None,
-        project_status: None,
-        start_date: None,
-        target_date: None,
-        source_url: None,
-        read_status: None,
-        reminder_text: None,
-        fire_at: None,
-        reminder_status: None,
-        resolved: false,
-        anchor: None,
-        pinned: vec![],
-        active_filter: None,
-        default_view: None,
-        theme: None,
-        ink_attachment: None,
-        date: None,
-        symbol: None,
-        entry: None,
-        exit: None,
-        pnl: None,
-        r_multiple: None,
-    };
+    let mut node = Node::new(node_type);
+    node.tags = tags;
 
     let mut engine = Engine::open(vault)?;
     engine.create_node(rel_path, &node, &body)?;
