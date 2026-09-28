@@ -11,6 +11,13 @@ struct TradingJournalView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
     @State private var entries: [Entry] = []
+    @State private var showAdd = false
+    @State private var draftSymbol = ""
+    @State private var draftEntry = ""
+    @State private var draftExit = ""
+    @State private var draftPNL = ""
+    @State private var draftThesis = ""
+    @State private var addError: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -50,14 +57,67 @@ struct TradingJournalView: View {
                     .foregroundStyle(c.textSecondary)
             }
             Spacer()
-            Text("+ New entry")
-                .font(Typography.sans(14, weight: .medium))
-                .foregroundStyle(c.textDisabled)
-                .padding(.horizontal, Space.lg)
-                .padding(.vertical, Space.sm)
-                .background(c.bgHover)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-                .accessibilityLabel("New trade journal entry is not available yet")
+            Button("+ New entry") { showAdd = true }
+                .buttonStyle(.bordered)
+                .popover(isPresented: $showAdd) { addPopover }
+        }
+    }
+
+    private var addPopover: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text("New trade entry").font(Typography.sans(14, weight: .medium)).foregroundStyle(c.textPrimary)
+            TextField("Symbol", text: $draftSymbol).textFieldStyle(.roundedBorder)
+            TextField("Entry price", text: $draftEntry).textFieldStyle(.roundedBorder)
+            TextField("Exit price (blank = open)", text: $draftExit).textFieldStyle(.roundedBorder)
+            TextField("P&L (optional)", text: $draftPNL).textFieldStyle(.roundedBorder)
+            TextField("Thesis", text: $draftThesis, axis: .vertical).lineLimit(3...6).textFieldStyle(.roundedBorder)
+            if let addError {
+                Text(addError).font(Typography.caption()).foregroundStyle(c.danger)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { resetDraft() }
+                Button("Add") { addEntry() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(draftSymbol.trimmingCharacters(in: .whitespaces).isEmpty || Double(draftEntry) == nil)
+            }
+        }
+        .padding(Space.lg)
+        .frame(width: 320)
+    }
+
+    private func resetDraft() {
+        draftSymbol = ""; draftEntry = ""; draftExit = ""; draftPNL = ""; draftThesis = ""
+        addError = nil
+        showAdd = false
+    }
+
+    private func addEntry() {
+        let symbol = draftSymbol.trimmingCharacters(in: .whitespaces).uppercased()
+        guard !symbol.isEmpty, let entryPrice = Double(draftEntry) else { return }
+        let exit = Double(draftExit)
+        let id = newNodeId()
+        let nowDate = Date()
+        let now = ISO8601DateFormatter().string(from: nowDate)
+        let node = FfiNode(
+            id: id, nodeType: .tradingJournalEntry, created: now, modified: now, schemaVersion: currentSchemaVersion(),
+            lifecycle: nil, archivedAt: nil, domain: "trading", tags: [], relations: [], deletedAt: nil, isTemplate: false,
+            distillationLevel: nil, status: nil, priority: nil, scheduledDate: nil, dueDate: nil, estimatedPomodoros: nil,
+            actualPomodoros: nil, recurrence: nil, recurrenceOccurrences: nil, checklist: [], start: nil, end: nil,
+            externalId: nil, projectStatus: nil, startDate: nil, targetDate: nil, sourceUrl: nil,
+            readStatus: nil, reminderText: nil, fireAt: nil, reminderStatus: nil, resolved: false, anchor: nil,
+            pinned: [], activeFilter: nil, defaultView: nil, theme: nil, inkAttachment: nil, date: nil, symbol: symbol,
+            entry: entryPrice, exit: exit, pnl: Double(draftPNL), rMultiple: nil
+        )
+        let stamp = nowDate.formatted(.iso8601.year().month().day().dateSeparator(.dash)) // yyyy-MM-dd
+        let slug = symbol.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+        let path = "trading/journal/\(stamp)-\(slug)-\(id.suffix(6).lowercased()).md"
+        do {
+            try engine.createNode(relPath: path, node: node, body: "\n\(draftThesis.trimmingCharacters(in: .whitespacesAndNewlines))\n")
+            resetDraft()
+            load()
+        } catch {
+            addError = String(describing: error)
         }
     }
 
@@ -174,7 +234,7 @@ struct TradingJournalView: View {
             Text("Your trade log starts here.")
                 .font(Typography.sans(15, weight: .semibold))
                 .foregroundStyle(c.textPrimary)
-            Text("Create a trading-journal-entry in the Trading Area to keep the thesis and outcomes alongside the rest of your work.")
+            Text("Use “+ New entry” to log a trade and keep the thesis and outcomes alongside the rest of your work.")
                 .font(Typography.bodySans())
                 .foregroundStyle(c.textSecondary)
                 .frame(maxWidth: 420, alignment: .leading)
