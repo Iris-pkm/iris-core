@@ -50,7 +50,9 @@ xcodebuild -create-xcframework \
 
 - `IrisCoreFFI.xcframework/` — checked-in binary artifact: the release `iris-core` dylib (relocatable, ad-hoc signed) plus its UniFFI-generated C header, wrapped as a `.binaryTarget` in `Package.swift`. Replaces the old dev-loop hack of linking directly against a freshly-`cargo build`-ed debug dylib by absolute path.
 - `Sources/IrisCore/` — the generated Swift bindings (`FfiEngine`, `FfiNode`, `FfiRecurrence`, etc.) — the actual Swift-friendly API.
-- `Sources/Iris/` — the real app: `IrisApp.swift` (entry point), `Theme.swift` (mirrors `design/tokens.md` exactly — colors/spacing/type as Swift values), `Screens/` (one file per screen from `design/navigation.md`).
+- `Sources/Iris/` — the real app: `IrisApp.swift` (entry point + `VaultSession`, the shared engine holder for secondary windows), `AppShell.swift` (sidebar + content routing), `RightRail.swift` (Connections/Dev Mode panel), `NodeWindowView.swift` (a node in its own window, ADR-038), `QuickCapturePanel.swift` (the global ⌘⇧C floating capture panel, Carbon hotkey — works while Iris is unfocused), `Theme.swift` (mirrors `design/tokens.md` exactly — colors/spacing/type as Swift values), `Screens/` (one file per screen from `design/navigation.md`; per-screen build status lives there).
+
+**Verification status:** this shell builds clean and launches, but several recent flows (editor autosave, global Quick Capture hotkey, Reading List/Trading Journal add/edit/status, multi-window) have not been click-tested — see `design/QA_CHECKLIST.md` for the steps.
 
 ## Design reference
 

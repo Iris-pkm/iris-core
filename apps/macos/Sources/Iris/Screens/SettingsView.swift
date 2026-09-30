@@ -49,7 +49,7 @@ struct SettingsView: View {
                     Text("Inbox").tag("Inbox")
                 }.labelsHidden().frame(width: 130)
             }
-            preferenceRow("Quick capture", detail: "Focused-app shortcut") {
+            preferenceRow("Quick capture", detail: "Global shortcut") {
                 Text("⌘⇧C").font(Typography.mono(13)).padding(.horizontal, Space.sm).padding(.vertical, Space.xs).background(Color.secondary.opacity(0.12)).clipShape(RoundedRectangle(cornerRadius: Radius.sm))
             }
         case .appearance:
