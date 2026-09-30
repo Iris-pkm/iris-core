@@ -18,6 +18,11 @@ struct TradingJournalView: View {
     @State private var draftPNL = ""
     @State private var draftThesis = ""
     @State private var addError: String?
+    @State private var editingPath: String?
+    @State private var editSymbol = ""
+    @State private var editEntry = ""
+    @State private var editExit = ""
+    @State private var editPNL = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -133,7 +138,11 @@ struct TradingJournalView: View {
                         .foregroundStyle(c.textSecondary)
                 }
                 Spacer()
-                stateBadge(entry)
+                Button { beginEdit(entry) } label: { Image(systemName: "pencil") }
+                    .buttonStyle(.plain).foregroundStyle(c.textSecondary).help("Edit trade")
+                    .accessibilityLabel("Edit trade")
+                    .popover(isPresented: Binding(get: { editingPath == entry.path }, set: { if !$0 { editingPath = nil } })) { editPopover(entry.path) }
+                statusMenu(entry)
             }
 
             Text(priceLine(entry))
@@ -167,6 +176,64 @@ struct TradingJournalView: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.lg))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(entry.node.symbol ?? "Trade"), \(priceLine(entry))")
+    }
+
+    private func statusMenu(_ entry: Entry) -> some View {
+        Menu {
+            if entry.node.exit == nil {
+                Button("Close trade…") { beginEdit(entry) }
+            } else {
+                Button("Reopen (clears exit and P&L)") { update(entry.path) { $0.exit = nil; $0.pnl = nil } }
+            }
+        } label: { stateBadge(entry) }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("Trade is \(entry.node.exit == nil ? "open" : "closed"), change status")
+    }
+
+    private func beginEdit(_ entry: Entry) {
+        editSymbol = entry.node.symbol ?? ""
+        editEntry = entry.node.entry.map { String($0) } ?? ""
+        editExit = entry.node.exit.map { String($0) } ?? ""
+        editPNL = entry.node.pnl.map { String($0) } ?? ""
+        editingPath = entry.path
+    }
+
+    private func editPopover(_ path: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text("Edit trade").font(Typography.sans(14, weight: .medium)).foregroundStyle(c.textPrimary)
+            TextField("Symbol", text: $editSymbol).textFieldStyle(.roundedBorder)
+            TextField("Entry price", text: $editEntry).textFieldStyle(.roundedBorder)
+            TextField("Exit price (blank = open)", text: $editExit).textFieldStyle(.roundedBorder)
+            TextField("P&L (blank to clear)", text: $editPNL).textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") { editingPath = nil }
+                Button("Save") {
+                    let symbol = editSymbol.trimmingCharacters(in: .whitespaces).uppercased()
+                    update(path) {
+                        $0.symbol = symbol.isEmpty ? nil : symbol
+                        $0.entry = Double(editEntry)
+                        $0.exit = Double(editExit)
+                        $0.pnl = Double(editPNL)
+                    }
+                    editingPath = nil
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(editSymbol.trimmingCharacters(in: .whitespaces).isEmpty || Double(editEntry) == nil)
+            }
+        }
+        .padding(Space.lg)
+        .frame(width: 320)
+    }
+
+    /// Read-modify-write via `updateNode` (thesis body is untouched).
+    private func update(_ path: String, _ change: (inout FfiNode) -> Void) {
+        guard let parsed = try? engine.readNode(relPath: path) else { return }
+        var node = parsed.node
+        change(&node)
+        node.modified = ISO8601DateFormatter().string(from: Date())
+        _ = try? engine.updateNode(relPath: path, node: node)
+        load()
     }
 
     private func stateBadge(_ entry: Entry) -> some View {
@@ -277,7 +344,7 @@ struct TradingJournalView: View {
         let nodes = (try? engine.search(query: "", nodeType: "trading-journal-entry", domain: nil, tag: nil)) ?? []
         entries = nodes.compactMap { cached in
             guard let parsed = try? engine.readNode(relPath: cached.path) else { return nil }
-            return Entry(id: cached.id, node: parsed.node, body: parsed.body.trimmingCharacters(in: .whitespacesAndNewlines))
+            return Entry(id: cached.id, path: cached.path, node: parsed.node, body: parsed.body.trimmingCharacters(in: .whitespacesAndNewlines))
         }.sorted { $0.node.created > $1.node.created }
     }
 
@@ -300,6 +367,7 @@ struct TradingJournalView: View {
 
     private struct Entry: Identifiable {
         let id: String
+        let path: String
         let node: FfiNode
         let body: String
     }
