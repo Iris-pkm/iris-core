@@ -10,6 +10,9 @@ struct QuickCaptureView: View {
     let recentCaptures: [CaptureItem]
     let dismiss: () -> Void
     let saved: (CaptureItem) -> Void
+    /// Hosted in `QuickCapturePanel`'s own borderless window: no full-screen
+    /// dim, and room around the card for its shadow instead of a top inset.
+    var floating = false
 
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -19,6 +22,17 @@ struct QuickCaptureView: View {
     @FocusState private var inputFocused: Bool
 
     var body: some View {
+        if floating {
+            capturePanel
+                .padding(40)
+                .onAppear { inputFocused = true }
+                .onExitCommand(perform: dismiss)
+        } else {
+            overlay
+        }
+    }
+
+    private var overlay: some View {
         ZStack(alignment: .top) {
             c.bgCanvas.opacity(0.82).ignoresSafeArea()
 

@@ -22,6 +22,7 @@ struct IrisApp: App {
         WindowGroup {
             OnboardingView()
                 .environmentObject(session)
+                .onAppear { QuickCapturePanel.shared.install(session: session) }
                 .preferredColorScheme(colorScheme)
         }
         .windowResizability(.contentSize)

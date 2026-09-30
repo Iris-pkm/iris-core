@@ -46,7 +46,6 @@ struct AppShell: View {
     /// directly via `openNode`. All three selections are mutually exclusive.
     @State private var workbenchCategory: PARAWorkbenchView.Category?
     @State private var showSearch = false
-    @State private var showQuickCapture = false
     /// The seven "standing" sidebar destinations (Trash/History/Spaces/
     /// Today/Reading List/Music Ideas/Calendar) as one selection, not seven
     /// independent booleans. They used to be separate `@State` bools, each
@@ -58,7 +57,6 @@ struct AppShell: View {
     /// how `selectedLens`/`workbenchCategory` already work.
     @State private var auxScreen: AuxScreen?
     @State private var activeSpaceID: String?
-    @State private var recentCaptures: [CaptureItem] = []
     /// Graph (Phase 6, pulled forward at the user's explicit request — see
     /// `GraphView`'s own doc comment) is a full replacement, not a sibling
     /// selection or an overlay — `screen-flow.md`'s own note: "treat as
@@ -148,26 +146,6 @@ struct AppShell: View {
                     showSearch = false
                 }
             }
-
-            if showQuickCapture {
-                QuickCaptureView(
-                    engine: engine,
-                    recentCaptures: recentCaptures,
-                    dismiss: { showQuickCapture = false }
-                ) { item in
-                    recentCaptures.insert(item, at: 0)
-                    showQuickCapture = false
-                }
-            }
-
-            // A mounted command is the small SwiftUI-native bridge from the
-            // documented shortcut to this global overlay. A true outside-the-
-            // app hotkey needs the later NSPanel/event-monitoring integration.
-            Button("", action: { showQuickCapture = true })
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .opacity(0)
-                .frame(width: 0, height: 0)
-                .accessibilityHidden(true)
 
             Button("", action: { if openNode != nil { showGraph = true } })
                 .keyboardShortcut("g", modifiers: .command)
