@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Iris pre-push: enforce AGENTS.md §7 "docs ship with every commit/push".
+# One script serves all three repos (.git, .git-private, .git-design) — it
+# tells which by the git dir name. Presence check only: it can't judge whether
+# the *right* docs changed, just that some did. Bypass: `git push --no-verify`
+# or IRIS_SKIP_DOC_CHECK=1.
+set -u
+[ "${IRIS_SKIP_DOC_CHECK:-}" = 1 ] && exit 0
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GRACE=7200 # docs may have been committed up to 2h before the code commit
+repo="$(basename "${GIT_DIR:-.git}")"
+priv() { git --git-dir="$ROOT/.git-private" --work-tree="$ROOT" "$@"; }
+dsgn() { git --git-dir="$ROOT/.git-design" --work-tree="$ROOT/design" "$@"; }
+
+# True if repo-fn $1 has a commit touching path(s) $2.. with commit time >= $since.
+touched_since() {
+  local fn=$1; shift
+  "$fn" log --format=%ct -- "$@" 2>/dev/null | awk -v s="$since" '$1 >= s { f=1 } END { exit !f }'
+}
+dirty() { local fn=$1; shift; [ -n "$("$fn" status --porcelain -- "$@" 2>/dev/null | grep -v '^??')" ]; }
+
+fail=0
+while read -r _ local_sha _ remote_sha; do
+  [[ "$local_sha" =~ ^0+$ ]] && continue # branch delete
+  if [[ "$remote_sha" =~ ^0+$ ]]; then range="$local_sha --not --remotes"; else range="$remote_sha..$local_sha"; fi
+  # shellcheck disable=SC2086
+  files="$(git diff --name-only $(git rev-list $range | tail -1)^ $local_sha 2>/dev/null)"
+  [ -z "$files" ] && files="$(git show --name-only --format= "$local_sha")"
+  # shellcheck disable=SC2086
+  first_ts="$(git rev-list --format=%ct $range | grep -E '^[0-9]+$' | sort -n | head -1)"
+  [ -z "$first_ts" ] && continue
+  since=$((first_ts - GRACE))
+
+  case "$repo" in
+    .git)
+      echo "$files" | grep -Eq '^(iris-core|iris-cli|apps)/|^Cargo\.(toml|lock)$|^\.github/' || continue
+      if ! touched_since priv docs/PROGRESS.md; then
+        echo "pre-push: code changed but docs/PROGRESS.md has no planning-repo commit since these commits."
+        dirty priv docs/PROGRESS.md && echo "  (PROGRESS.md has uncommitted edits — commit them in .git-private.)"
+        fail=1
+      fi
+      if echo "$files" | grep -Eq '^apps/[^/]+/Sources/Iris/'; then
+        if ! touched_since dsgn navigation.md && ! touched_since dsgn QA_CHECKLIST.md; then
+          echo "pre-push: UI code changed but design/navigation.md and QA_CHECKLIST.md have no design-repo commit."
+          dirty dsgn navigation.md QA_CHECKLIST.md && echo "  (design/ has uncommitted edits — commit them in .git-design.)"
+          fail=1
+        fi
+      fi ;;
+    .git-private)
+      echo "$files" | grep -Eq '^(docs/|AGENTS\.md)' || continue
+      echo "$files" | grep -q '^docs/PROGRESS\.md$' || {
+        echo "pre-push: docs/AGENTS.md changed but docs/PROGRESS.md was not part of this push (docs-only changes still get an entry)."
+        fail=1; } ;;
+    .git-design)
+      echo "$files" | grep -Eq '\.md$' || continue
+      if ! touched_since priv docs/PROGRESS.md; then
+        echo "pre-push: design docs changed but docs/PROGRESS.md has no planning-repo commit since these commits."
+        fail=1
+      fi ;;
+  esac
+done
+
+if [ "$fail" = 1 ]; then
+  echo "Docs must ship with the commit — see AGENTS.md §7. Bypass (emergencies only): git push --no-verify"
+  exit 1
+fi
+exit 0

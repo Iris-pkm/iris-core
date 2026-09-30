@@ -10,6 +10,10 @@ A local-first, git-backed ideation station — a single place to accumulate, str
 - **`iris-cli`** — a scriptable command-line client (`iris` binary) over `iris-core`: `init`/`create`/`read`/`search`/`update`/`edit`/`done`/`rm`/`restore`, plus `iris mcp-server`, which exposes the vault to any MCP-compatible AI agent (search/read/create/update tools) over stdio.
 - **`apps/macos`** — the native SwiftUI shell (no webview), consuming `iris-core` through the real UniFFI `FfiEngine` surface. See [`apps/macos/README.md`](apps/macos/README.md) for building/running it.
 
+## Contributing (humans and AI agents)
+
+Read `AGENTS.md` first (in the private planning repo; see `docs/WINDOWS_SETUP.md` for the three-repo layout). After cloning, run `bash scripts/install-hooks.sh` once to enable the pre-push check that requires docs to ship with code.
+
 ## Building the core + CLI
 
 ```bash
