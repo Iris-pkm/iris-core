@@ -18,6 +18,8 @@ struct ReadingListView: View {
     @State private var draftTitle = ""
     @State private var draftURL = ""
     @State private var addError: String?
+    @State private var editingPath: String?
+    @State private var editURL = ""
     private let filters = ["All", "Unread", "Reading", "Read"]
 
     var body: some View {
@@ -105,8 +107,44 @@ struct ReadingListView: View {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title(item.0)).font(Typography.bodySans()).foregroundStyle(c.textPrimary)
                 Text(item.1.sourceUrl ?? "Internal note").font(Typography.mono(11)).foregroundStyle(c.textSecondary)
-            }; Spacer(); status(item.1.readStatus ?? "Unread")
+            }; Spacer()
+            Button { editURL = item.1.sourceUrl ?? ""; editingPath = item.0.path } label: { Image(systemName: "pencil") }
+                .buttonStyle(.plain).foregroundStyle(c.textSecondary).help("Edit source URL")
+                .accessibilityLabel("Edit source URL")
+                .popover(isPresented: Binding(get: { editingPath == item.0.path }, set: { if !$0 { editingPath = nil } })) { editPopover(item.0.path) }
+            statusMenu(item)
         }.padding(.vertical, Space.sm)
+    }
+    private func statusMenu(_ item: (CachedNode, FfiNode)) -> some View {
+        Menu {
+            ForEach(["unread", "reading", "read"], id: \.self) { s in Button(s.capitalized) { update(item.0.path) { $0.readStatus = s } } }
+        } label: { status(item.1.readStatus ?? "Unread") }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("Change status, currently \(item.1.readStatus ?? "unread")")
+    }
+    private func editPopover(_ path: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text("Edit source URL").font(Typography.sans(14, weight: .medium)).foregroundStyle(c.textPrimary)
+            TextField("Source URL (blank to clear)", text: $editURL).textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") { editingPath = nil }
+                Button("Save") {
+                    let url = editURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    update(path) { $0.sourceUrl = url.isEmpty ? nil : url }
+                    editingPath = nil
+                }.buttonStyle(.borderedProminent)
+            }
+        }.padding(Space.lg).frame(width: 320)
+    }
+    /// Read-modify-write via `updateNode`, same pattern as `fileToProject`.
+    private func update(_ path: String, _ change: (inout FfiNode) -> Void) {
+        guard let parsed = try? engine.readNode(relPath: path) else { return }
+        var node = parsed.node
+        change(&node)
+        node.modified = ISO8601DateFormatter().string(from: Date())
+        _ = try? engine.updateNode(relPath: path, node: node)
+        load()
     }
     private var rail: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
