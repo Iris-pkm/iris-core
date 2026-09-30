@@ -661,6 +661,12 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     
     func updateNode(relPath: String, node: FfiNode) throws 
     
+    /**
+     * Replace a node's frontmatter and body together — what an editor's
+     * save needs. `update_node` alone always keeps the existing body.
+     */
+    func updateNodeWithBody(relPath: String, node: FfiNode, body: String) throws 
+    
     func vaultRoot()  -> String
     
 }
@@ -1202,6 +1208,20 @@ open func updateNode(relPath: String, node: FfiNode)throws   {try rustCallWithEr
 }
 }
     
+    /**
+     * Replace a node's frontmatter and body together — what an editor's
+     * save needs. `update_node` alone always keeps the existing body.
+     */
+open func updateNodeWithBody(relPath: String, node: FfiNode, body: String)throws   {try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_update_node_with_body(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(relPath),
+        FfiConverterTypeFfiNode_lower(node),
+        FfiConverterString.lower(body),$0
+    )
+}
+}
+    
 open func vaultRoot() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_iris_core_fn_method_ffiengine_vault_root(
@@ -1338,7 +1358,8 @@ public func FfiConverterTypeActivationEnvironment_lower(_ value: ActivationEnvir
 /**
  * A derived cache row for one node — enough to prove the cache reflects the
  * vault and to power basic task-view queries (ARCHITECTURE.md §12); richer
- * queries (search, full relation lookups) build on this later.
+ * queries (search, full relation lookups) build on this later. `Serialize`
+ * is for `iris-cli`'s `--json` output, not consumed inside `iris-core` itself.
  */
 public struct CachedNode: Equatable, Hashable {
     public var id: String
@@ -4180,6 +4201,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_update_node() != 59049) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_update_node_with_body() != 53190) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_vault_root() != 50317) {

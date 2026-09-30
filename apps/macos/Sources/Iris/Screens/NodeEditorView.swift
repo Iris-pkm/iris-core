@@ -8,9 +8,10 @@ import IrisCore
 /// **Scope, honestly flagged:** renders the body as plain paragraphs, not
 /// full Tier-A rich markdown (headings/lists/checklists/tables/etc., ADR-027)
 /// — that's real, separate scope, not something to fake with a naive
-/// Markdown-to-Text pass. Editing is also not wired yet (no `updateNode`
-/// call on body/tag edits) — this is the read/display half of the screen
-/// first, matching "do one thing at a time."
+/// Markdown-to-Text pass. The body is a plain-text editor (`TextEditor`)
+/// that autosaves through `updateNodeWithBody` — one engine mutation
+/// (undoable, one git commit) per save, after 2s idle, on navigating away,
+/// or ⌘S. Tag editing is still not wired.
 struct NodeEditorView: View {
     let engine: FfiEngine
     let relPath: String
@@ -22,10 +23,18 @@ struct NodeEditorView: View {
     @State private var linkedCount: Int = 0
     @State private var loadError: String?
     @State private var showExport = false
+    /// The editable body (trimmed). `prefix`/`suffix` are the file's original
+    /// leading/trailing whitespace, put back on save so an unedited file's
+    /// bytes don't shift.
+    @State private var draft = ""
+    @State private var savedDraft = ""
+    @State private var prefix = "\n"
+    @State private var suffix = "\n"
+    @State private var saveError: String?
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 if let parsed {
                     metaRow(for: parsed.node)
@@ -57,19 +66,39 @@ struct NodeEditorView: View {
                         .padding(.bottom, Space.xl)
                     }
 
-                    Text(parsed.body.trimmingCharacters(in: .whitespacesAndNewlines))
-                        .font(Typography.serif(16))
-                        .foregroundStyle(c.textPrimary)
-                        .lineSpacing(6)
-                        .frame(maxWidth: 600, alignment: .leading)
                 } else if let loadError {
                     Text(loadError).font(Typography.bodySans()).foregroundStyle(c.danger)
                 }
             }
-            .padding(EdgeInsets(top: Space.xxl, leading: Space.xxxl + Space.lg, bottom: Space.xl, trailing: Space.xxxl + Space.lg))
+            .padding(EdgeInsets(top: Space.xxl, leading: Space.xxxl + Space.lg, bottom: 0, trailing: Space.xxxl + Space.lg))
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if parsed != nil {
+                TextEditor(text: $draft)
+                    .font(Typography.serif(16))
+                    .foregroundStyle(c.textPrimary)
+                    .lineSpacing(6)
+                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: 600 + Space.xxxl, maxHeight: .infinity, alignment: .leading)
+                    .padding(EdgeInsets(top: 0, leading: Space.xxxl + Space.lg - 5, bottom: 0, trailing: 0))
+                    .accessibilityLabel("Note body")
+                    .background(Button("", action: { save() }).keyboardShortcut("s", modifiers: .command).opacity(0).accessibilityHidden(true))
+                    .task(id: draft) {
+                        guard draft != savedDraft else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        if !Task.isCancelled { save() }
+                    }
+                if let saveError {
+                    Text("Not saved: \(saveError)")
+                        .font(Typography.bodySmall())
+                        .foregroundStyle(c.danger)
+                        .padding(.horizontal, Space.xxxl + Space.lg)
+                        .padding(.vertical, Space.sm)
+                }
+            }
         }
         .background(c.bgCanvas)
+        .onDisappear { save() }
         .id(relPath) // fresh load whenever a different node opens
         .task(id: relPath) { load() }
         .sheet(isPresented: $showExport) {
@@ -141,10 +170,35 @@ struct NodeEditorView: View {
         (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
     }
 
+    /// Write the draft back (frontmatter re-read fresh so a metadata change
+    /// made elsewhere isn't overwritten). No-op when nothing changed.
+    private func save() {
+        guard parsed != nil, draft != savedDraft else { return }
+        do {
+            let current = try engine.readNode(relPath: relPath)
+            try engine.updateNodeWithBody(relPath: relPath, node: current.node, body: prefix + draft + suffix)
+            savedDraft = draft
+            saveError = nil
+        } catch {
+            saveError = String(describing: error)
+        }
+    }
+
     private func load() {
         do {
             let result = try engine.readNode(relPath: relPath)
             parsed = result
+            let raw = result.body
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft = trimmed
+            savedDraft = trimmed
+            if trimmed.isEmpty {
+                prefix = "\n"; suffix = "\n"
+            } else {
+                prefix = String(raw.prefix(while: { $0.isWhitespace || $0.isNewline }))
+                suffix = String(String(raw.reversed().prefix(while: { $0.isWhitespace || $0.isNewline })).reversed())
+            }
+            saveError = nil
             linkedCount = (try? engine.connections(nodeId: result.node.id))?.count ?? 0
             loadError = nil
         } catch {

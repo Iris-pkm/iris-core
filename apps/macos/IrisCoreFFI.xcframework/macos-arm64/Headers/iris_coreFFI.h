@@ -518,6 +518,11 @@ RustBuffer uniffi_iris_core_fn_method_ffiengine_upcoming(uint64_t ptr, RustBuffe
 void uniffi_iris_core_fn_method_ffiengine_update_node(uint64_t ptr, RustBuffer rel_path, RustBuffer node, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_UPDATE_NODE_WITH_BODY
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_UPDATE_NODE_WITH_BODY
+void uniffi_iris_core_fn_method_ffiengine_update_node_with_body(uint64_t ptr, RustBuffer rel_path, RustBuffer node, RustBuffer body, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_VAULT_ROOT
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_METHOD_FFIENGINE_VAULT_ROOT
 RustBuffer uniffi_iris_core_fn_method_ffiengine_vault_root(uint64_t ptr, RustCallStatus *_Nonnull out_status
@@ -1155,6 +1160,12 @@ uint16_t uniffi_iris_core_checksum_method_ffiengine_upcoming(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE
 uint16_t uniffi_iris_core_checksum_method_ffiengine_update_node(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE_WITH_BODY
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_METHOD_FFIENGINE_UPDATE_NODE_WITH_BODY
+uint16_t uniffi_iris_core_checksum_method_ffiengine_update_node_with_body(void
     
 );
 #endif

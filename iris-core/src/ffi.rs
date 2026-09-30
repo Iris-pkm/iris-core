@@ -610,6 +610,18 @@ impl FfiEngine {
         Ok(self.lock().update_node(rel_path, &node)?)
     }
 
+    /// Replace a node's frontmatter and body together — what an editor's
+    /// save needs. `update_node` alone always keeps the existing body.
+    pub fn update_node_with_body(
+        &self,
+        rel_path: String,
+        node: FfiNode,
+        body: String,
+    ) -> Result<(), FfiEngineError> {
+        let node: Node = node.try_into().map_err(ffi_conv_err)?;
+        Ok(self.lock().update_node_with_body(rel_path, &node, &body)?)
+    }
+
     pub fn delete_node(&self, rel_path: String) -> Result<(), FfiEngineError> {
         Ok(self.lock().delete_node(rel_path)?)
     }
@@ -1127,6 +1139,33 @@ mod tests {
             .unwrap();
         let after = engine.read_node("notes/a.md".to_string()).unwrap();
         assert_eq!(after.node.domain.as_deref(), Some("iris-dev"));
+    }
+
+    #[test]
+    fn ffi_engine_update_node_with_body_replaces_body() {
+        let dir = TempDir::new("update-body");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+        let node = FfiNode::from(&sample_node());
+        engine
+            .create_node("notes/a.md".to_string(), node, "\n\nHello.\n".to_string())
+            .unwrap();
+
+        let read = engine.read_node("notes/a.md".to_string()).unwrap();
+        engine
+            .update_node_with_body(
+                "notes/a.md".to_string(),
+                read.node.clone(),
+                "\nRewritten.\n".to_string(),
+            )
+            .unwrap();
+        let after = engine.read_node("notes/a.md".to_string()).unwrap();
+        assert!(after.body.contains("Rewritten.") && !after.body.contains("Hello."));
+        assert_eq!(after.node.id, read.node.id);
+
+        // Undo restores the old body (the write is a normal undoable mutation).
+        assert!(engine.undo().unwrap());
+        let undone = engine.read_node("notes/a.md".to_string()).unwrap();
+        assert!(undone.body.contains("Hello."));
     }
 
     #[test]
