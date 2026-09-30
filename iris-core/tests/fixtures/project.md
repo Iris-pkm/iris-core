@@ -5,7 +5,7 @@ created: 2026-01-10T08:00:00Z
 modified: 2026-01-15T10:00:00Z
 schema_version: 1
 domain: iris-dev
-status: active
+project_status: active
 target_date: 2026-06-30
 ---
 
