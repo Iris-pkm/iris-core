@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{Node, NodeType, Priority};
+use iris_core::types::{Node, NodeType, Priority, ProjectStatus};
 use rmcp::{
     handler::server::wrapper::Parameters, model::*, schemars, tool, tool_handler, tool_router,
     transport::stdio, ErrorData as McpError, ServerHandler, ServiceExt,
@@ -67,6 +67,10 @@ pub struct UpdateNoteParams {
     pub status: Option<String>,
     #[serde(default)]
     pub clear_status: bool,
+    /// Project lifecycle: someday, planned, active, paused, completed or
+    /// cancelled. Projects only; illegal transitions are rejected (ADR-018).
+    #[serde(default)]
+    pub project_status: Option<String>,
     /// urgent, high, normal, or low.
     #[serde(default)]
     pub priority: Option<String>,
@@ -152,13 +156,31 @@ impl IrisMcpServer {
         ))]))
     }
 
-    #[tool(description = "Update an existing note's status, priority, domain, tags, or body.")]
+    #[tool(
+        description = "Update an existing note's status, priority, domain, tags, or body. For project nodes use project_status (someday/planned/active/paused/completed/cancelled) instead of status."
+    )]
     fn update_note(
         &self,
         Parameters(p): Parameters<UpdateNoteParams>,
     ) -> Result<CallToolResult, McpError> {
         let mut engine = self.open()?;
         let mut node = engine.read_node(&p.path).map_err(to_mcp_err)?.node;
+
+        if node.node_type == NodeType::Project && (p.status.is_some() || p.clear_status) {
+            return Err(McpError::invalid_params(
+                "projects use project_status (lifecycle), not status".to_string(),
+                None,
+            ));
+        }
+        if let Some(s) = &p.project_status {
+            let target: ProjectStatus = s
+                .parse()
+                .map_err(|e: String| McpError::invalid_params(e, None))?;
+            engine
+                .set_project_status(&p.path, target)
+                .map_err(to_mcp_err)?;
+            node = engine.read_node(&p.path).map_err(to_mcp_err)?.node;
+        }
 
         if p.clear_status {
             node.status = None;

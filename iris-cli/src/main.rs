@@ -17,7 +17,7 @@ use clap::{Parser, Subcommand};
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{Node, NodeType, Priority};
+use iris_core::types::{Node, NodeType, Priority, ProjectStatus};
 
 #[derive(Parser)]
 #[command(name = "iris", version, about = "Scriptable client for an Iris vault")]
@@ -78,6 +78,11 @@ enum Command {
         status: Option<String>,
         #[arg(long = "clear-status")]
         clear_status: bool,
+        /// Project lifecycle: someday, planned, active, paused, completed or
+        /// cancelled. Projects only; goes through the ADR-018 state machine
+        /// (illegal transitions are rejected). Use this, not --status, on projects.
+        #[arg(long = "project-status")]
+        project_status: Option<String>,
         /// urgent, high, normal, or low.
         #[arg(long)]
         priority: Option<String>,
@@ -158,6 +163,7 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             rel_path,
             status,
             clear_status,
+            project_status,
             priority,
             clear_priority,
             domain,
@@ -175,6 +181,7 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             UpdateFields {
                 status,
                 clear_status,
+                project_status,
                 priority,
                 clear_priority,
                 domain,
@@ -299,6 +306,7 @@ fn cmd_done(vault: &PathBuf, rel_path: &str) -> Result<(), IrisError> {
 struct UpdateFields {
     status: Option<String>,
     clear_status: bool,
+    project_status: Option<String>,
     priority: Option<String>,
     clear_priority: bool,
     domain: Option<String>,
@@ -320,6 +328,44 @@ fn parse_date(s: &str) -> Result<NaiveDate, IrisError> {
 fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(), IrisError> {
     let mut engine = Engine::open(vault)?;
     let mut node = engine.read_node(rel_path)?.node;
+
+    // `status` is the task workflow field; on a project it would be written
+    // but never read by the state machine (ADR-039), so refuse instead.
+    if node.node_type == NodeType::Project && (fields.status.is_some() || fields.clear_status) {
+        return Err(IrisError::Validation(
+            "projects use --project-status (lifecycle), not --status".into(),
+        ));
+    }
+    // Do the state-machine move first: it validates before writing anything,
+    // so an illegal transition leaves the node untouched.
+    let mut moved = None;
+    if let Some(s) = &fields.project_status {
+        let target: ProjectStatus = s.parse().map_err(IrisError::Validation)?;
+        let activated = engine.set_project_status(rel_path, target)?;
+        node = engine.read_node(rel_path)?.node;
+        moved = Some((s.clone(), activated));
+    }
+    let only_project_status = moved.is_some()
+        && !fields.clear_status
+        && fields.priority.is_none()
+        && !fields.clear_priority
+        && fields.domain.is_none()
+        && !fields.clear_domain
+        && fields.scheduled_date.is_none()
+        && !fields.clear_scheduled_date
+        && fields.due_date.is_none()
+        && !fields.clear_due_date
+        && fields.add_tags.is_empty()
+        && fields.remove_tags.is_empty()
+        && fields.body.is_none();
+    if only_project_status {
+        let (s, activated) = moved.unwrap();
+        println!(
+            "Project status -> {s}{}",
+            if activated { " (activated)" } else { "" }
+        );
+        return Ok(());
+    }
 
     if fields.clear_status {
         node.status = None;
@@ -364,7 +410,10 @@ fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(
         Some(b) => engine.update_node_with_body(rel_path, &node, &format!("\n{b}\n"))?,
         None => engine.update_node(rel_path, &node)?,
     }
-    println!("Updated {rel_path}");
+    match moved {
+        Some((s, _)) => println!("Updated {rel_path} (project status -> {s})"),
+        None => println!("Updated {rel_path}"),
+    }
     Ok(())
 }
 

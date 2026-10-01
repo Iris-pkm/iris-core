@@ -382,6 +382,12 @@ impl Engine {
 
         let rel_path = rel_path.as_ref();
         let existing = self.vault.read_node(rel_path)?;
+        if existing.node.node_type != crate::types::NodeType::Project {
+            return Err(IrisError::Validation(format!(
+                "{} is not a project (project_status only applies to project nodes)",
+                rel_path.display()
+            )));
+        }
         let current = existing.node.project_status.clone();
 
         let legal = match &current {
@@ -1250,6 +1256,24 @@ mod tests {
                 .distillation_level,
             None
         );
+    }
+
+    #[test]
+    fn set_project_status_rejects_non_project_nodes_and_parses_from_str() {
+        let dir = TempDir::new("project-status-type");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\n")
+            .unwrap();
+        let err = engine
+            .set_project_status("notes/a.md", crate::types::ProjectStatus::Planned)
+            .unwrap_err();
+        assert!(err.to_string().contains("not a project"));
+        assert_eq!(
+            "active".parse::<crate::types::ProjectStatus>().unwrap(),
+            crate::types::ProjectStatus::Active
+        );
+        assert!("bogus".parse::<crate::types::ProjectStatus>().is_err());
     }
 
     #[test]

@@ -174,6 +174,20 @@ pub enum ProjectStatus {
     Cancelled,
 }
 
+impl std::str::FromStr for ProjectStatus {
+    type Err = String;
+
+    /// Parses the on-disk spelling (`someday`, `planned`, `active`, `paused`,
+    /// `completed`, `cancelled`) so CLI/MCP clients don't each re-implement it.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_yaml::from_str(s).map_err(|_| {
+            format!(
+                "invalid project status {s:?} (want someday, planned, active, paused, completed or cancelled)"
+            )
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnnotationAnchor {
     pub text_fragment: Option<String>,
