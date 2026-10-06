@@ -46,10 +46,18 @@ xcodebuild -create-xcframework \
 
 **Ceiling, flagged:** the xcframework currently has only a `macos-arm64` slice (this dev machine's architecture) — a universal/Intel build needs step 1 run on (or cross-compiled for) x86_64 and merged in via a second `-library`/`-headers` pair on the same `-create-xcframework` invocation. Tracked as part of ADR-029's five-target-triple pipeline, not a regression introduced here.
 
+## Tests
+
+```bash
+cd apps/macos && swift test
+```
+Covers the `IrisMarkdown` target (Markdown → blocks parser behind the Node Editor's Preview mode). UI itself is not unit-tested; see `design/QA_CHECKLIST.md`.
+
 ## Structure
 
 - `IrisCoreFFI.xcframework/` — checked-in binary artifact: the release `iris-core` dylib (relocatable, ad-hoc signed) plus its UniFFI-generated C header, wrapped as a `.binaryTarget` in `Package.swift`. Replaces the old dev-loop hack of linking directly against a freshly-`cargo build`-ed debug dylib by absolute path.
 - `Sources/IrisCore/` — the generated Swift bindings (`FfiEngine`, `FfiNode`, `FfiRecurrence`, etc.) — the actual Swift-friendly API.
+- `Sources/IrisMarkdown/` — pure-Foundation Markdown block parser (Apple's `AttributedString(markdown:)` regrouped into blocks, plus `- [ ]` checklists, `[[wikilinks]]` and `==highlight==`); its own target so it's unit-testable. Tests in `Tests/IrisMarkdownTests/`.
 - `Sources/Iris/` — the real app: `IrisApp.swift` (entry point + `VaultSession`, the shared engine holder for secondary windows), `AppShell.swift` (sidebar + content routing), `RightRail.swift` (Connections/Dev Mode panel), `NodeWindowView.swift` (a node in its own window, ADR-038), `QuickCapturePanel.swift` (the global ⌘⇧C floating capture panel, Carbon hotkey — works while Iris is unfocused), `Theme.swift` (mirrors `design/tokens.md` exactly — colors/spacing/type as Swift values), `Screens/` (one file per screen from `design/navigation.md`; per-screen build status lives there).
 
 **Verification status:** this shell builds clean and launches, but several recent flows (editor autosave, global Quick Capture hotkey, Reading List/Trading Journal add/edit/status, multi-window) have not been click-tested — see `design/QA_CHECKLIST.md` for the steps.

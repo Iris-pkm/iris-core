@@ -209,7 +209,7 @@ struct AppShell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             HStack(spacing: 0) {
-                NodeEditorView(engine: engine, relPath: node.path)
+                NodeEditorView(engine: engine, relPath: node.path, onOpenNode: { openNode = $0 })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider().background(c.borderDefault)
                 RightRail(engine: engine, relPath: node.path)

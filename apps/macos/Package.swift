@@ -26,10 +26,22 @@ let package = Package(
             dependencies: ["iris_coreFFI"],
             path: "Sources/IrisCore"
         ),
+        // Pure-Foundation Markdown parsing for the Node Editor's Preview mode
+        // (Tier A, ADR-027) — its own target so it can be unit-tested without
+        // the app or the FFI binary.
+        .target(
+            name: "IrisMarkdown",
+            path: "Sources/IrisMarkdown"
+        ),
         .executableTarget(
             name: "Iris",
-            dependencies: ["IrisCore"],
+            dependencies: ["IrisCore", "IrisMarkdown"],
             path: "Sources/Iris"
+        ),
+        .testTarget(
+            name: "IrisMarkdownTests",
+            dependencies: ["IrisMarkdown"],
+            path: "Tests/IrisMarkdownTests"
         ),
     ]
 )

@@ -16,13 +16,14 @@ struct NodeWindowView: View {
     let relPath: String?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openWindow) private var openWindow
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
     var body: some View {
         Group {
             if let engine = session.engine, let relPath {
                 HStack(spacing: 0) {
-                    NodeEditorView(engine: engine, relPath: relPath)
+                    NodeEditorView(engine: engine, relPath: relPath, onOpenNode: { openWindow(value: $0.path) })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     Divider().background(c.borderDefault)
                     RightRail(engine: engine, relPath: relPath)

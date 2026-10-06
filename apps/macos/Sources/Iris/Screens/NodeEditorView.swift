@@ -5,16 +5,26 @@ import IrisCore
 /// §3) — one editor shell, not four per-type designs, matching the single
 /// `Node` model in `iris-core`.
 ///
-/// **Scope, honestly flagged:** renders the body as plain paragraphs, not
-/// full Tier-A rich markdown (headings/lists/checklists/tables/etc., ADR-027)
-/// — that's real, separate scope, not something to fake with a naive
-/// Markdown-to-Text pass. The body is a plain-text editor (`TextEditor`)
-/// that autosaves through `updateNodeWithBody` — one engine mutation
-/// (undoable, one git commit) per save, after 2s idle, on navigating away,
-/// or ⌘S. Tag editing is still not wired.
+/// The body has two modes, switched by the header control or ⌘E and
+/// remembered across notes: rendered **Preview** (default — `MarkdownBodyView`,
+/// Tier A reading: headings, lists, checklists, quotes, code, tables,
+/// wikilinks, highlight; see its doc for what's not built) and a plain-text
+/// **Edit** mode (`TextEditor`) that autosaves through `updateNodeWithBody` —
+/// one engine mutation (undoable, one git commit) per save, after 2s idle, on
+/// navigating away, or ⌘S. There is no WYSIWYG editing yet, and tag editing
+/// is still not wired.
 struct NodeEditorView: View {
     let engine: FfiEngine
     let relPath: String
+    /// Opens another node (a followed `[[wikilink]]`). The main window routes
+    /// it through `AppShell`, a secondary window opens a new window; nil
+    /// disables wikilink navigation.
+    var onOpenNode: ((CachedNode) -> Void)?
+
+    /// "preview" (rendered Markdown, the default) or "edit" (plain-text
+    /// editor). Remembered across notes and launches.
+    @AppStorage("iris.editorMode") private var mode = "preview"
+    @State private var linkMessage: String?
 
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -43,6 +53,12 @@ struct NodeEditorView: View {
                             .font(Typography.h1())
                             .foregroundStyle(c.textPrimary)
                         Spacer()
+                        Picker("Mode", selection: $mode) {
+                            Text("Preview").tag("preview")
+                            Text("Edit").tag("edit")
+                        }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 140)
+                        .accessibilityLabel("Note mode")
                         Button("Open in New Window") { openWindow(value: relPath) }
                             .buttonStyle(.bordered)
                         Button("Export…") { showExport = true }
@@ -73,7 +89,25 @@ struct NodeEditorView: View {
             .padding(EdgeInsets(top: Space.xxl, leading: Space.xxxl + Space.lg, bottom: 0, trailing: Space.xxxl + Space.lg))
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if parsed != nil {
+            if parsed != nil && mode == "preview" {
+                ScrollView {
+                    Group {
+                        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("Nothing here yet — switch to Edit to start writing.")
+                                .font(Typography.serif(16)).italic().foregroundStyle(c.textDisabled)
+                        } else {
+                            MarkdownBodyView(source: draft, onWikiLink: openWikiLink)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(EdgeInsets(top: Space.sm, leading: Space.xxxl + Space.lg, bottom: Space.xl, trailing: Space.xxxl + Space.lg))
+                }
+                .background(Button("", action: toggleMode).keyboardShortcut("e", modifiers: .command).opacity(0).accessibilityHidden(true))
+                if let linkMessage {
+                    Text(linkMessage).font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
+                        .padding(.horizontal, Space.xxxl + Space.lg).padding(.vertical, Space.sm)
+                }
+            } else if parsed != nil {
                 TextEditor(text: $draft)
                     .font(Typography.serif(16))
                     .foregroundStyle(c.textPrimary)
@@ -83,6 +117,7 @@ struct NodeEditorView: View {
                     .padding(EdgeInsets(top: 0, leading: Space.xxxl + Space.lg - 5, bottom: 0, trailing: 0))
                     .accessibilityLabel("Note body")
                     .background(Button("", action: { save() }).keyboardShortcut("s", modifiers: .command).opacity(0).accessibilityHidden(true))
+                    .background(Button("", action: toggleMode).keyboardShortcut("e", modifiers: .command).opacity(0).accessibilityHidden(true))
                     .task(id: draft) {
                         guard draft != savedDraft else { return }
                         try? await Task.sleep(for: .seconds(2))
@@ -168,6 +203,26 @@ struct NodeEditorView: View {
     /// stands in, same stand-in `search.rs`/`Sidebar` already use.
     private func titleFor(_ node: FfiNode?) -> String {
         (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+    }
+
+    private func toggleMode() { mode = mode == "preview" ? "edit" : "preview" }
+
+    /// Resolve `[[Target]]` to a node by file-name stem (case-insensitive;
+    /// hyphens count as spaces, matching how the app slugs new notes).
+    private func openWikiLink(_ target: String) {
+        func stem(_ path: String) -> String {
+            ((path as NSString).lastPathComponent as NSString).deletingPathExtension.lowercased()
+        }
+        let wanted = target.lowercased()
+        let hits = (try? engine.search(query: target, nodeType: nil, domain: nil, tag: nil)) ?? []
+        let hit = hits.first { stem($0.path) == wanted }
+            ?? hits.first { stem($0.path).replacingOccurrences(of: "-", with: " ") == wanted }
+        if let hit, let onOpenNode {
+            linkMessage = nil
+            onOpenNode(hit)
+        } else {
+            linkMessage = "No note named “\(target)”."
+        }
     }
 
     /// Write the draft back (frontmatter re-read fresh so a metadata change
