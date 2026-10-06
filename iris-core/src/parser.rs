@@ -99,6 +99,87 @@ impl ParsedNode {
     }
 }
 
+/// Rewrite `old_raw` (a node's existing frontmatter) so it describes `node`,
+/// touching only the top-level keys whose value actually changed (ADR-019
+/// lossless *editing*): comments, blank lines, key order, formatting of
+/// untouched keys, and fields `Node` doesn't model all survive byte-for-byte.
+/// Changed keys are rewritten in place, new keys are appended, and a key
+/// `Node` models but `node` no longer sets is removed.
+///
+/// Returns `None` when it can't do this safely (CRLF, quoted keys, a
+/// continuation line stranded behind a comment, ...) — the result is always
+/// re-parsed and checked equal to `node`, so `None` means "fall back to a full
+/// re-serialize", never a wrong file.
+// ponytail: line-based on top-level keys, no YAML CST; nested-value edits rewrite
+// the whole top-level key (comments inside that key are lost). Upgrade: a real CST.
+pub fn merge_frontmatter(old_raw: &str, node: &Node) -> Option<String> {
+    use serde_yaml::{Mapping, Value};
+
+    if old_raw.contains('\r') {
+        return None;
+    }
+    let as_map = |n: &Node| match serde_yaml::to_value(n).ok()? {
+        Value::Mapping(m) => Some(m),
+        _ => None,
+    };
+    let old_typed = as_map(&serde_yaml::from_str::<Node>(old_raw).ok()?)?;
+    let new_map = as_map(node)?;
+    let emit = |k: &Value, v: &Value| {
+        let mut m = Mapping::new();
+        m.insert(k.clone(), v.clone());
+        serde_yaml::to_string(&m)
+            .ok()
+            .map(|s| s.trim_end_matches('\n').to_string())
+    };
+
+    // Split into segments: a top-level `key:` line plus its indented / `- `
+    // continuation lines, or a single verbatim comment/blank line.
+    let mut segs: Vec<(Option<String>, Vec<&str>)> = Vec::new();
+    for line in old_raw.split('\n') {
+        let first = line.chars().next();
+        if matches!(first, Some(' ' | '\t' | '-')) {
+            match segs.last_mut() {
+                Some((Some(_), lines)) => lines.push(line),
+                _ => return None,
+            }
+        } else if first.is_none() || first == Some('#') {
+            segs.push((None, vec![line]));
+        } else {
+            let key = line.split_once(':')?.0;
+            if key.starts_with(['"', '\'']) {
+                return None;
+            }
+            segs.push((Some(key.trim_end().to_string()), vec![line]));
+        }
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (key, lines) in &segs {
+        let Some(key) = key else {
+            out.push(lines.join("\n"));
+            continue;
+        };
+        let k = Value::String(key.clone());
+        seen.insert(k.clone());
+        match (new_map.get(&k), old_typed.get(&k)) {
+            (Some(new), Some(old)) if new == old => out.push(lines.join("\n")),
+            (Some(new), _) => out.push(emit(&k, new)?),
+            (None, Some(_)) => {} // modelled field cleared -> drop it
+            (None, None) => out.push(lines.join("\n")), // unknown field -> keep
+        }
+    }
+    for (k, v) in &new_map {
+        // Skip keys only present via serde defaults (e.g. `resolved: false`).
+        if !seen.contains(k) && old_typed.get(k) != Some(v) {
+            out.push(emit(k, v)?);
+        }
+    }
+
+    let merged = out.join("\n");
+    (serde_yaml::from_str::<Node>(&merged).ok()? == *node).then_some(merged)
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -403,5 +484,54 @@ No closing delimiter...
 ";
         let result = ParsedNode::parse(contents);
         assert!(result.is_err());
+    }
+
+    const COMMENTED: &str = "\
+# my note
+id: 01JQZ8XYABCDEF0123456789AB
+type: note
+mood: smug   # unknown to Iris
+created: 2026-01-15T09:30:00Z
+modified: 2026-01-15T09:30:00Z
+schema_version: 1
+tags:
+- a
+- b
+
+# trailing comment
+domain: work";
+
+    #[test]
+    fn merge_unchanged_node_is_byte_identical() {
+        let node = ParsedNode::parse(&format!("---\n{COMMENTED}\n---\n"))
+            .unwrap()
+            .node;
+        assert_eq!(merge_frontmatter(COMMENTED, &node).unwrap(), COMMENTED);
+    }
+
+    #[test]
+    fn merge_edits_only_changed_keys() {
+        let mut node = ParsedNode::parse(&format!("---\n{COMMENTED}\n---\n"))
+            .unwrap()
+            .node;
+        node.tags.push("c".into());
+        node.domain = None; // clearing a modelled field removes it
+        node.priority = Some(crate::types::Priority::High); // new key appended
+        let merged = merge_frontmatter(COMMENTED, &node).unwrap();
+        assert!(merged.starts_with("# my note\nid: 01JQ"));
+        assert!(merged.contains("mood: smug   # unknown to Iris"));
+        assert!(merged.contains("# trailing comment"));
+        assert!(merged.contains("tags:\n- a\n- b\n- c"));
+        assert!(!merged.contains("domain"));
+        assert!(merged.ends_with("priority: high"));
+        assert_eq!(serde_yaml::from_str::<Node>(&merged).unwrap(), node);
+    }
+
+    #[test]
+    fn merge_declines_crlf() {
+        let node = ParsedNode::parse(&format!("---\n{COMMENTED}\n---\n"))
+            .unwrap()
+            .node;
+        assert!(merge_frontmatter(&COMMENTED.replace('\n', "\r\n"), &node).is_none());
     }
 }

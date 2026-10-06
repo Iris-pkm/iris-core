@@ -426,10 +426,10 @@ impl Engine {
 
     /// Replace a node's frontmatter, preserving its body byte-for-byte.
     ///
-    /// Note: this re-serializes the *frontmatter* from `node` — comments, key
-    /// order, and unknown fields in the old frontmatter are not preserved.
-    /// Full field-level lossless editing (ADR-019) needs a concrete-syntax-tree
-    /// editor in `parser.rs` that doesn't exist yet; this is a known, honest gap.
+    /// The frontmatter is edited in place (`parser::merge_frontmatter`): only
+    /// changed top-level keys are rewritten; comments, key order and unknown
+    /// fields survive (ADR-019). Falls back to a full re-serialize if the
+    /// existing frontmatter can't be merged safely.
     pub fn update_node(&mut self, rel_path: impl AsRef<Path>, node: &Node) -> IrisResult<()> {
         let rel_path = rel_path.as_ref();
         let existing_body = self.vault.read_node(rel_path)?.body;
@@ -442,7 +442,7 @@ impl Engine {
     /// right for pure metadata edits but leaves no way to change content —
     /// this is the method anything that actually edits a note (an editor
     /// UI, `iris-cli`'s `update --body`/`--edit`) needs instead. Same
-    /// frontmatter-re-serialization gap as `update_node` (ADR-019).
+    /// in-place frontmatter editing as `update_node` (ADR-019).
     pub fn update_node_with_body(
         &mut self,
         rel_path: impl AsRef<Path>,
@@ -665,7 +665,17 @@ impl Engine {
         commit_msg: &str,
     ) -> IrisResult<()> {
         validate(node)?;
-        let contents = render(node, body)?;
+        // Edit the existing frontmatter in place when there is one (ADR-019);
+        // a new file, or one the merge can't safely handle, is re-serialized.
+        let merged = self
+            .vault
+            .read_node(rel_path)
+            .ok()
+            .and_then(|old| crate::parser::merge_frontmatter(&old.raw_frontmatter, node));
+        let contents = match merged {
+            Some(fm) => format!("---\n{fm}\n---{body}"),
+            None => render(node, body)?,
+        };
         self.vault.write_node(rel_path, &contents)?;
         self.rebuild_cache()?;
         self.git.commit_all(commit_msg)?;
@@ -1028,6 +1038,33 @@ mod tests {
         let reopened = Engine::open(dir.path()).unwrap();
         let cached = reopened.cache.list_nodes().unwrap();
         assert_eq!(cached.len(), 1);
+    }
+
+    #[test]
+    fn update_node_keeps_frontmatter_comments_and_unknown_fields() {
+        let dir = TempDir::new("lossless-fm");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let node = sample_node();
+        engine
+            .create_node("notes/a.md", &node, "\n\nbody\n")
+            .unwrap();
+        // Hand-edit the file the way a user's editor would.
+        let path = dir.path().join("notes/a.md");
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            text.replacen("---\n", "---\n# keep me\nmood: smug\n", 1),
+        )
+        .unwrap();
+
+        let mut updated = engine.read_node("notes/a.md").unwrap().node;
+        updated.domain = Some("trading".into());
+        engine.update_node("notes/a.md", &updated).unwrap();
+
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert!(after.starts_with("---\n# keep me\nmood: smug\n"), "{after}");
+        assert!(after.contains("domain: trading"));
+        assert!(after.ends_with("\n\nbody\n"));
     }
 
     #[test]
