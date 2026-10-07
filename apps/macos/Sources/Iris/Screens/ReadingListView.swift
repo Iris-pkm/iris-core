@@ -118,9 +118,15 @@ struct ReadingListView: View {
     private func statusMenu(_ item: (CachedNode, FfiNode)) -> some View {
         Menu {
             ForEach(["unread", "reading", "read"], id: \.self) { s in Button(s.capitalized) { update(item.0.path) { $0.readStatus = s } } }
+            Divider()
+            Button("Delete item", role: .destructive) { deleteItem(item.0.path) }
         } label: { status(item.1.readStatus ?? "Unread") }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .accessibilityLabel("Change status, currently \(item.1.readStatus ?? "unread")")
+    }
+    private func deleteItem(_ path: String) {
+        _ = try? engine.deleteNode(relPath: path)
+        load()
     }
     private func editPopover(_ path: String) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
