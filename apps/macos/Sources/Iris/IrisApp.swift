@@ -11,6 +11,23 @@ import IrisCore
 /// window handles as "no vault open yet" rather than assuming non-nil.
 final class VaultSession: ObservableObject {
     @Published var engine: FfiEngine?
+
+    /// "This note was just saved" — published so any other open editor on the
+    /// same note (another window) can refresh (ADR-038 follow-up). In-process
+    /// only: edits made by the CLI or another app are not seen.
+    struct Change: Equatable {
+        let path: String
+        /// The editor that saved, so it can ignore its own echo.
+        let origin: UUID
+        let seq: Int
+    }
+    @Published private(set) var change: Change?
+    private var seq = 0
+
+    func noteChanged(path: String, from origin: UUID) {
+        seq += 1
+        change = Change(path: path, origin: origin, seq: seq)
+    }
 }
 
 @main

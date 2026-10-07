@@ -39,6 +39,7 @@ struct NodeWindowView: View {
             }
         }
         .background(c.bgCanvas)
+        .environmentObject(session)
         .frame(minWidth: 480, idealWidth: 720, minHeight: 400, idealHeight: 600)
     }
 }

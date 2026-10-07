@@ -43,6 +43,11 @@ struct NodeEditorView: View {
     @State private var suffix = "\n"
     @State private var saveError: String?
     @State private var newTag = ""
+    @EnvironmentObject private var session: VaultSession
+    /// Identifies this editor so it ignores its own `session.change` echo.
+    @State private var editorID = UUID()
+    /// Another window saved this note while this one had unsaved edits.
+    @State private var changedElsewhere = false
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -134,6 +139,13 @@ struct NodeEditorView: View {
                         try? await Task.sleep(for: .seconds(2))
                         if !Task.isCancelled { save() }
                     }
+                if changedElsewhere {
+                    Text("This note was changed in another window. Your unsaved edits will replace that version when saved.")
+                        .font(Typography.bodySmall())
+                        .foregroundStyle(c.warning)
+                        .padding(.horizontal, Space.xxxl + Space.lg)
+                        .padding(.vertical, Space.sm)
+                }
                 if let saveError {
                     Text("Not saved: \(saveError)")
                         .font(Typography.bodySmall())
@@ -147,6 +159,17 @@ struct NodeEditorView: View {
         .onDisappear { save() }
         .id(relPath) // fresh load whenever a different node opens
         .task(id: relPath) { load() }
+        .onReceive(session.$change) { change in
+            guard let change, change.path == relPath, change.origin != editorID else { return }
+            if draft == savedDraft {
+                load()   // nothing unsaved here: take the other window's version
+                changedElsewhere = false
+            } else {
+                // Provisional (owner hasn't picked the conflict UX, TASKS.md T5): keep the
+                // draft, say so; the autosave then overwrites the other window's edit.
+                changedElsewhere = true
+            }
+        }
         .sheet(isPresented: $showExport) {
             ExportSheet(engine: engine, relPath: relPath, title: titleFor(parsed?.node), dismiss: { showExport = false })
         }
@@ -233,6 +256,7 @@ struct NodeEditorView: View {
             try engine.updateNode(relPath: relPath, node: node)
             parsed?.node.tags = node.tags
             saveError = nil
+            session.noteChanged(path: relPath, from: editorID)
         } catch {
             saveError = String(describing: error)
         }
@@ -275,6 +299,8 @@ struct NodeEditorView: View {
             try engine.updateNodeWithBody(relPath: relPath, node: current.node, body: prefix + draft + suffix)
             savedDraft = draft
             saveError = nil
+            changedElsewhere = false
+            session.noteChanged(path: relPath, from: editorID)
         } catch {
             saveError = String(describing: error)
         }
