@@ -11,8 +11,8 @@ import IrisCore
 /// wikilinks, highlight; see its doc for what's not built) and a plain-text
 /// **Edit** mode (`TextEditor`) that autosaves through `updateNodeWithBody` —
 /// one engine mutation (undoable, one git commit) per save, after 2s idle, on
-/// navigating away, or ⌘S. There is no WYSIWYG editing yet, and tag editing
-/// is still not wired.
+/// navigating away, or ⌘S. There is no WYSIWYG editing yet. Tags are
+/// edited inline in the header (add field, × per chip), each an undoable update.
 struct NodeEditorView: View {
     let engine: FfiEngine
     let relPath: String
@@ -41,6 +41,7 @@ struct NodeEditorView: View {
     @State private var prefix = "\n"
     @State private var suffix = "\n"
     @State private var saveError: String?
+    @State private var newTag = ""
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -66,21 +67,30 @@ struct NodeEditorView: View {
                     }
                     .padding(.bottom, Space.sm)
 
-                    if !parsed.node.tags.isEmpty {
-                        HStack(spacing: Space.xs) {
-                            ForEach(parsed.node.tags, id: \.self) { tag in
+                    HStack(spacing: Space.xs) {
+                        ForEach(parsed.node.tags, id: \.self) { tag in
+                            HStack(spacing: Space.xxs) {
                                 Text(tag)
-                                    .font(Typography.caption())
-                                    .foregroundStyle(c.textSecondary)
-                                    .padding(.horizontal, Space.sm)
-                                    .padding(.vertical, Space.xxs)
-                                    .background(c.bgHover)
-                                    .clipShape(Capsule())
-                                    .overlay(Capsule().stroke(c.borderDefault, lineWidth: 1))
+                                Button { removeTag(tag) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Remove tag \(tag)")
                             }
+                            .font(Typography.caption())
+                            .foregroundStyle(c.textSecondary)
+                            .padding(.horizontal, Space.sm)
+                            .padding(.vertical, Space.xxs)
+                            .background(c.bgHover)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(c.borderDefault, lineWidth: 1))
                         }
-                        .padding(.bottom, Space.xl)
+                        TextField("Add tag", text: $newTag)
+                            .textFieldStyle(.plain)
+                            .font(Typography.caption())
+                            .frame(width: 80)
+                            .onSubmit(addTag)
+                            .accessibilityLabel("Add tag")
                     }
+                    .padding(.bottom, Space.xl)
 
                 } else if let loadError {
                     Text(loadError).font(Typography.bodySans()).foregroundStyle(c.danger)
@@ -203,6 +213,28 @@ struct NodeEditorView: View {
     /// stands in, same stand-in `search.rs`/`Sidebar` already use.
     private func titleFor(_ node: FfiNode?) -> String {
         (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+    }
+
+    private func addTag() {
+        let tag = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        newTag = ""
+        if !tag.isEmpty { editTags { if !$0.contains(tag) { $0.append(tag) } } }
+    }
+
+    private func removeTag(_ tag: String) { editTags { $0.removeAll { $0 == tag } } }
+
+    /// Re-read the node fresh (so a body/metadata change made elsewhere isn't
+    /// overwritten), apply the tag edit, and save it as one undoable update.
+    private func editTags(_ change: (inout [String]) -> Void) {
+        do {
+            var node = try engine.readNode(relPath: relPath).node
+            change(&node.tags)
+            try engine.updateNode(relPath: relPath, node: node)
+            parsed?.node.tags = node.tags
+            saveError = nil
+        } catch {
+            saveError = String(describing: error)
+        }
     }
 
     private func toggleMode() { mode = mode == "preview" ? "edit" : "preview" }
