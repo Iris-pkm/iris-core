@@ -23,6 +23,8 @@ struct TradingJournalView: View {
     @State private var editEntry = ""
     @State private var editExit = ""
     @State private var editPNL = ""
+    @State private var editRMultiple = ""
+    @State private var editThesis = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -185,9 +187,16 @@ struct TradingJournalView: View {
             } else {
                 Button("Reopen (clears exit and P&L)") { update(entry.path) { $0.exit = nil; $0.pnl = nil } }
             }
+            Divider()
+            Button("Delete trade", role: .destructive) { deleteTrade(entry.path) }
         } label: { stateBadge(entry) }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .accessibilityLabel("Trade is \(entry.node.exit == nil ? "open" : "closed"), change status")
+    }
+
+    private func deleteTrade(_ path: String) {
+        _ = try? engine.deleteNode(relPath: path)
+        load()
     }
 
     private func beginEdit(_ entry: Entry) {
@@ -195,6 +204,8 @@ struct TradingJournalView: View {
         editEntry = entry.node.entry.map { String($0) } ?? ""
         editExit = entry.node.exit.map { String($0) } ?? ""
         editPNL = entry.node.pnl.map { String($0) } ?? ""
+        editRMultiple = entry.node.rMultiple.map { String($0) } ?? ""
+        editThesis = entry.body
         editingPath = entry.path
     }
 
@@ -205,16 +216,27 @@ struct TradingJournalView: View {
             TextField("Entry price", text: $editEntry).textFieldStyle(.roundedBorder)
             TextField("Exit price (blank = open)", text: $editExit).textFieldStyle(.roundedBorder)
             TextField("P&L (blank to clear)", text: $editPNL).textFieldStyle(.roundedBorder)
+            TextField("R-multiple (optional)", text: $editRMultiple).textFieldStyle(.roundedBorder)
+            TextField("Thesis", text: $editThesis, axis: .vertical).lineLimit(3...6).textFieldStyle(.roundedBorder)
             HStack {
                 Spacer()
                 Button("Cancel") { editingPath = nil }
                 Button("Save") {
                     let symbol = editSymbol.trimmingCharacters(in: .whitespaces).uppercased()
-                    update(path) {
+                    let change: (inout FfiNode) -> Void = {
                         $0.symbol = symbol.isEmpty ? nil : symbol
                         $0.entry = Double(editEntry)
                         $0.exit = Double(editExit)
                         $0.pnl = Double(editPNL)
+                        $0.rMultiple = Double(editRMultiple)
+                    }
+                    // Only rewrite the body when the thesis was edited, so changing a
+                    // price never reshapes a hand-written body's whitespace (ADR-019).
+                    if editThesis.trimmingCharacters(in: .whitespacesAndNewlines)
+                        == (entries.first { $0.path == path }?.body ?? "") {
+                        update(path, change)
+                    } else {
+                        updateWithBody(path, body: editThesis, change)
                     }
                     editingPath = nil
                 }
@@ -233,6 +255,16 @@ struct TradingJournalView: View {
         change(&node)
         node.modified = ISO8601DateFormatter().string(from: Date())
         _ = try? engine.updateNode(relPath: path, node: node)
+        load()
+    }
+
+    /// Read-modify-write via `updateNodeWithBody`.
+    private func updateWithBody(_ path: String, body: String, _ change: (inout FfiNode) -> Void) {
+        guard let parsed = try? engine.readNode(relPath: path) else { return }
+        var node = parsed.node
+        change(&node)
+        node.modified = ISO8601DateFormatter().string(from: Date())
+        _ = try? engine.updateNodeWithBody(relPath: path, node: node, body: "\n\(body.trimmingCharacters(in: .whitespacesAndNewlines))\n")
         load()
     }
 
