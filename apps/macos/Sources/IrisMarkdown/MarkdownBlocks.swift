@@ -32,6 +32,9 @@ public struct MarkdownBlock: Identifiable, Equatable {
     /// True for the first block of a list item (the one that draws the bullet).
     public var showsMarker: Bool
     public var check: Check?
+    /// 0-based position among all checklist blocks in document order — the key
+    /// `MarkdownBlocks.toggleCheck` uses to find the matching `[ ]` in the raw source.
+    public var checkIndex: Int?
 
     public var isListItem: Bool { !list.isEmpty }
 }
@@ -91,6 +94,7 @@ public enum MarkdownBlocks {
         }
 
         var seenItems = Set<Int>()
+        var checkCount = 0
         var result: [MarkdownBlock] = []
         for (index, group) in groups.enumerated() {
             if case .table = group.key {
@@ -139,8 +143,11 @@ public enum MarkdownBlocks {
                 }
             }
 
+            var checkIndex: Int?
+            if check != nil { checkIndex = checkCount; checkCount += 1 }
             result.append(MarkdownBlock(id: index, kind: kind, text: text, quoteDepth: quoteDepth,
-                                        list: levels, showsMarker: showsMarker, check: check))
+                                        list: levels, showsMarker: showsMarker, check: check,
+                                        checkIndex: checkIndex))
         }
         return result
     }
@@ -167,6 +174,37 @@ public enum MarkdownBlocks {
         let bodyRows = cells.keys.filter { $0 >= 0 }.sorted().map(line)
         return MarkdownBlock(id: id, kind: .table(header: line(-1), rows: bodyRows), text: AttributedString(),
                              quoteDepth: 0, list: [], showsMarker: false, check: nil)
+    }
+
+    // MARK: - Toggling a checklist box
+
+    private static let checkRegex = try! NSRegularExpression(
+        pattern: #"^(\s*(?:>\s*)*(?:[-*+]|\d{1,9}[.)])\s+\[)([ xX])(\]\s+\S)"#)
+
+    /// Flips the `index`th checklist box (see `MarkdownBlock.checkIndex`) in the
+    /// raw `source` and returns the new source, changing exactly that one
+    /// character — nothing else in the note moves (ADR-019). Fenced code is
+    /// skipped, as in `preprocess`. Returns nil if there is no such box.
+    // Ceiling: relies on this scanner and `blocks(from:)` agreeing on what a
+    // checklist item is (ordinal matching); the tests pin the shared cases.
+    public static func toggleCheck(in source: String, index: Int) -> String? {
+        var inFence = false
+        var seen = 0
+        var lines = source.components(separatedBy: "\n")
+        for (n, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") { inFence.toggle(); continue }
+            if inFence { continue }
+            let ns = line as NSString
+            guard let m = checkRegex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { continue }
+            if seen == index {
+                let flipped = ns.substring(with: m.range(at: 2)) == " " ? "x" : " "
+                lines[n] = ns.replacingCharacters(in: m.range(at: 2), with: flipped)
+                return lines.joined(separator: "\n")
+            }
+            seen += 1
+        }
+        return nil
     }
 
     // MARK: - Iris extensions (wikilinks, highlight), applied before parsing

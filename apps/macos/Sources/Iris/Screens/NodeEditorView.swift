@@ -1,5 +1,6 @@
 import SwiftUI
 import IrisCore
+import IrisMarkdown
 
 /// The shared detail view every node type opens into (`design/navigation.md`
 /// §3) — one editor shell, not four per-type designs, matching the single
@@ -106,7 +107,7 @@ struct NodeEditorView: View {
                             Text("Nothing here yet — switch to Edit to start writing.")
                                 .font(Typography.serif(16)).italic().foregroundStyle(c.textDisabled)
                         } else {
-                            MarkdownBodyView(source: draft, onWikiLink: openWikiLink)
+                            MarkdownBodyView(source: draft, onWikiLink: openWikiLink, onToggleCheck: toggleCheck)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -235,6 +236,14 @@ struct NodeEditorView: View {
         } catch {
             saveError = String(describing: error)
         }
+    }
+
+    /// A clicked Preview checkbox: flip that one `[ ]`/`[x]` in the draft and
+    /// save immediately (a click is a discrete action, not typing).
+    private func toggleCheck(_ index: Int) {
+        guard let flipped = MarkdownBlocks.toggleCheck(in: draft, index: index) else { return }
+        draft = flipped
+        save()
     }
 
     private func toggleMode() { mode = mode == "preview" ? "edit" : "preview" }

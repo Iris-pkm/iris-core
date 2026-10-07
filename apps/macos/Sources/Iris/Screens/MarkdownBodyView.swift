@@ -7,12 +7,14 @@ import IrisMarkdown
 /// Parsing lives in the testable `IrisMarkdown` target; this file is layout.
 ///
 /// **Not built, flagged:** LaTeX math, callouts, footnotes, embeds, syntax
-/// highlighting in code blocks, raw HTML, and toggling a checklist box from
-/// the preview (it would have to rewrite the source) — checkboxes are display
-/// only. Editing is the separate plain-text mode in `NodeEditorView`.
+/// highlighting in code blocks, raw HTML. Clicking a checklist box calls
+/// `onToggleCheck` with the box's `checkIndex`; the owner rewrites the source
+/// (`MarkdownBlocks.toggleCheck`). Other editing is the plain-text mode in
+/// `NodeEditorView`.
 struct MarkdownBodyView: View {
     let source: String
     let onWikiLink: (String) -> Void
+    var onToggleCheck: ((Int) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
@@ -93,9 +95,16 @@ struct MarkdownBodyView: View {
         if !block.showsMarker {
             Color.clear
         } else if let check = block.check {
-            Image(systemName: check == .checked ? "checkmark.square.fill" : "square")
-                .foregroundStyle(check == .checked ? c.accentDefault : c.textSecondary)
-                .accessibilityLabel(check == .checked ? "Done" : "Not done")
+            Button {
+                if let i = block.checkIndex { onToggleCheck?(i) }
+            } label: {
+                Image(systemName: check == .checked ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(check == .checked ? c.accentDefault : c.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(onToggleCheck == nil)
+            .accessibilityLabel(check == .checked ? "Done" : "Not done")
+            .accessibilityAddTraits(.isToggle)
         } else if let level = block.list.last, level.ordered {
             Text("\(level.ordinal).").font(Typography.serif(16)).monospacedDigit().foregroundStyle(c.textSecondary)
         } else {

@@ -71,4 +71,48 @@ final class MarkdownBlocksTests: XCTestCase {
         let url = URL(string: "https://example.com")!
         XCTAssertNil(MarkdownBlocks.wikiTarget(from: url))
     }
+
+    // MARK: toggleCheck
+
+    private func diffCount(_ a: String, _ b: String) -> Int { zip(a, b).filter { $0 != $1 }.count }
+
+    func testToggleFlipsOnlyTheChosenBox() {
+        let src = "intro\n\n- [ ] a\n- [x] b\n- [ ] c\n\nouter"
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: src, index: 0), "intro\n\n- [x] a\n- [x] b\n- [ ] c\n\nouter")
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: src, index: 1), "intro\n\n- [ ] a\n- [ ] b\n- [ ] c\n\nouter")
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: src, index: 2), "intro\n\n- [ ] a\n- [x] b\n- [x] c\n\nouter")
+        XCTAssertNil(MarkdownBlocks.toggleCheck(in: src, index: 3))
+    }
+
+    func testToggleHandlesUppercaseNestedOrderedAndQuoted() {
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: "- [X] a", index: 0), "- [ ] a")
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: "- a\n  - [ ] b", index: 0), "- a\n  - [x] b")
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: "1. [ ] a", index: 0), "1. [x] a")
+        XCTAssertEqual(MarkdownBlocks.toggleCheck(in: "> - [ ] a", index: 0), "> - [x] a")
+    }
+
+    func testToggleSkipsFencedCodeAndKeepsEverythingElse() {
+        let src = "```\n- [ ] not real\n```\n- [ ] real\n- [ ] real"
+        let out = MarkdownBlocks.toggleCheck(in: src, index: 0)!
+        XCTAssertEqual(out, "```\n- [ ] not real\n```\n- [x] real\n- [ ] real")
+        XCTAssertEqual(out.count, src.count)
+        XCTAssertEqual(diffCount(src, out), 1)
+    }
+
+    func testCheckIndexAgreesWithToggleOnSharedCases() {
+        // Every parsed checklist block's checkIndex must flip that very item.
+        let srcs = ["- [ ] a\n- [x] b\n- plain\n- [ ] c",
+                    "```\n- [ ] x\n```\n- [ ] a\n  - [ ] b\n1. [x] c",
+                    "> - [ ] q\n\n- [ ] dup\n- [ ] dup"]
+        for src in srcs {
+            let blocks = MarkdownBlocks.parse(src).filter { $0.check != nil }
+            XCTAssertEqual(blocks.compactMap(\.checkIndex), Array(0..<blocks.count), src)
+            for b in blocks {
+                let out = MarkdownBlocks.toggleCheck(in: src, index: b.checkIndex!)!
+                let after = MarkdownBlocks.parse(out).filter { $0.check != nil }
+                XCTAssertNotEqual(after[b.checkIndex!].check, b.check, src)
+                XCTAssertEqual(after.map(text), blocks.map(text), src)
+            }
+        }
+    }
 }
