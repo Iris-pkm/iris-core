@@ -7,7 +7,7 @@ A local-first, git-backed ideation station — a single place to accumulate, str
 ## What's in this repo
 
 - **`iris-core`** — the Rust engine: typed nodes, PARA organization, task views, distillation queue, guided project activation, search, import/export, a WASM plugin runtime, and the UniFFI surface every native client binds to. No UI of any kind lives here.
-- **`iris-cli`** — a scriptable command-line client (`iris` binary) over `iris-core`: `init`/`create`/`read`/`search`/`update`/`edit`/`done`/`rm`/`restore`, plus `iris mcp-server`, which exposes the vault to any MCP-compatible AI agent (search/read/create/update tools) over stdio.
+- **`iris-cli`** — a scriptable command-line client (`iris` binary) over `iris-core`: `init`/`create`/`read`/`search`/`update`/`edit`/`done`/`rm`/`restore`. `update` can add/remove canonical relations by target ID or path. `iris mcp-server` exposes the vault to MCP-compatible AI agents (search/read/create/update tools) over stdio.
 - **`apps/macos`** — the native SwiftUI shell (no webview), consuming `iris-core` through the real UniFFI `FfiEngine` surface. See [`apps/macos/README.md`](apps/macos/README.md) for building/running it.
 
 ## Contributing (humans and AI agents)
@@ -20,7 +20,9 @@ Read `AGENTS.md` first (in the private planning repo; see `docs/WINDOWS_SETUP.md
 cargo build --workspace
 ./target/debug/iris -C /path/to/a/vault init
 ./target/debug/iris -C /path/to/a/vault create notes/idea.md --type note --body "hello"
+./target/debug/iris -C /path/to/a/vault create notes/other.md --type note --body "related"
 ./target/debug/iris -C /path/to/a/vault search
+./target/debug/iris -C /path/to/a/vault update notes/idea.md --add-relation references:notes/other.md
 ```
 
 `cargo test -p iris-core` runs the engine's own test suite (round-trip parsing, cache rebuilds, node CRUD, plugin sandbox, etc.).

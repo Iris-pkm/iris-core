@@ -21,7 +21,7 @@ use crate::export::{self, ExportFormat, IdmDoc};
 use crate::git::GitRepo;
 use crate::integrity::{self, IntegrityReport};
 use crate::parser::ParsedNode;
-use crate::types::Node;
+use crate::types::{Node, Relation};
 use crate::vault::Vault;
 
 /// A captured node state, for undo/redo: either the node existed (with this
@@ -464,6 +464,120 @@ impl Engine {
             body,
             &format!("Update {}", rel_path.display()),
         )
+    }
+
+    /// Apply relation edits to a freshly read node before its caller makes
+    /// one combined metadata/body write. Derived inverse labels are rejected
+    /// with their canonical type; they are never persisted (ADR-017).
+    /// Removals may target missing or trashed nodes so dangling edges can be
+    /// cleaned up. When the same edge is removed and added, addition wins.
+    pub fn edit_relations(
+        &self,
+        node: &mut Node,
+        additions: &[Relation],
+        removals: &[Relation],
+    ) -> IrisResult<bool> {
+        for rel in additions.iter().chain(removals) {
+            if rel.rel_type.is_empty() || rel.rel_type.chars().any(char::is_whitespace) {
+                return Err(IrisError::Validation(format!(
+                    "invalid relation type {:?}",
+                    rel.rel_type
+                )));
+            }
+            if let Some(canonical) = crate::connections::canonical_for_inverse(&rel.rel_type) {
+                return Err(IrisError::Validation(format!(
+                    "{} is a derived inverse; use {canonical}",
+                    rel.rel_type
+                )));
+            }
+        }
+        for rel in additions {
+            if rel.target == node.id {
+                return Err(IrisError::Validation("self-relation is not allowed".into()));
+            }
+            if self
+                .cache
+                .query_nodes(
+                    "SELECT * FROM nodes WHERE id = ?1 AND deleted_at IS NULL",
+                    [rel.target.as_str()],
+                )?
+                .is_empty()
+            {
+                return Err(IrisError::Validation(format!(
+                    "relation target {} does not exist or is in Trash",
+                    rel.target
+                )));
+            }
+        }
+
+        let before = node.relations.clone();
+        node.relations.retain(|rel| !removals.contains(rel));
+        for rel in additions {
+            if !node.relations.contains(rel) {
+                node.relations.push(rel.clone());
+            }
+        }
+        Ok(node.relations != before)
+    }
+
+    pub fn add_relation(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        rel_type: &str,
+        target_id: &str,
+    ) -> IrisResult<bool> {
+        self.change_relation(rel_path.as_ref(), rel_type, target_id, true)
+    }
+
+    pub fn remove_relation(
+        &mut self,
+        rel_path: impl AsRef<Path>,
+        rel_type: &str,
+        target_id: &str,
+    ) -> IrisResult<bool> {
+        self.change_relation(rel_path.as_ref(), rel_type, target_id, false)
+    }
+
+    fn change_relation(
+        &mut self,
+        rel_path: &Path,
+        rel_type: &str,
+        target_id: &str,
+        add: bool,
+    ) -> IrisResult<bool> {
+        let existing = self.read_node(rel_path)?;
+        let mut node = existing.node.clone();
+        let rel = Relation {
+            rel_type: rel_type.into(),
+            target: target_id.into(),
+        };
+        let changed = if add {
+            self.edit_relations(&mut node, &[rel], &[])?
+        } else {
+            self.edit_relations(&mut node, &[], &[rel])?
+        };
+        if !changed {
+            return Ok(false);
+        }
+        self.push_undo(
+            rel_path,
+            UndoState::Existing {
+                node: Box::new(existing.node),
+                body: existing.body.clone(),
+            },
+        );
+        let verb = if add { "Add" } else { "Remove" };
+        self.write_node_raw(
+            rel_path,
+            &node,
+            &existing.body,
+            &format!(
+                "{verb} relation {rel_type} {} {}",
+                target_id,
+                rel_path.display()
+            ),
+        )?;
+        Ok(true)
     }
 
     /// Soft-delete a node: sets `deleted_at` (ADR-016). The file is not removed
@@ -1065,6 +1179,104 @@ mod tests {
         assert!(after.starts_with("---\n# keep me\nmood: smug\n"), "{after}");
         assert!(after.contains("domain: trading"));
         assert!(after.ends_with("\n\nbody\n"));
+    }
+
+    #[test]
+    fn relation_edits_validate_and_round_trip() {
+        let dir = TempDir::new("relation-edit");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        let source = sample_node();
+        let target = sample_node();
+        engine
+            .create_node("notes/a.md", &source, "\nbody\n")
+            .unwrap();
+        engine
+            .create_node("notes/b.md", &target, "\nbody\n")
+            .unwrap();
+        let path = dir.path().join("notes/a.md");
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(&path, text.replacen("---\n", "---\n# keep me\n", 1)).unwrap();
+
+        assert!(engine
+            .add_relation("notes/a.md", "references", &target.id)
+            .unwrap());
+        assert!(!engine
+            .add_relation("notes/a.md", "references", &target.id)
+            .unwrap());
+        assert!(fs::read_to_string(&path).unwrap().contains("# keep me"));
+        let outgoing = crate::connections::connections(engine.cache(), &source.id).unwrap();
+        let incoming = crate::connections::connections(engine.cache(), &target.id).unwrap();
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(incoming.len(), 1);
+        assert_eq!(
+            outgoing[0].direction,
+            crate::connections::ConnectionDirection::Outgoing
+        );
+        assert_eq!(
+            incoming[0].direction,
+            crate::connections::ConnectionDirection::Incoming
+        );
+
+        assert!(engine
+            .remove_relation("notes/a.md", "references", &target.id)
+            .unwrap());
+        assert!(!engine
+            .remove_relation("notes/a.md", "references", &target.id)
+            .unwrap());
+        assert!(engine.undo().unwrap());
+        assert_eq!(
+            engine.read_node("notes/a.md").unwrap().node.relations.len(),
+            1
+        );
+
+        for (kind, id) in [
+            ("references", "missing"),
+            ("references", source.id.as_str()),
+            ("referenced-by", target.id.as_str()),
+            ("bad type", target.id.as_str()),
+        ] {
+            assert!(matches!(
+                engine.add_relation("notes/a.md", kind, id),
+                Err(IrisError::Validation(_))
+            ));
+        }
+        engine.delete_node("notes/b.md").unwrap();
+        assert!(matches!(
+            engine.add_relation("notes/a.md", "references", &target.id),
+            Err(IrisError::Validation(_))
+        ));
+        // A dangling edge can still be removed after its target is trashed.
+        assert!(engine
+            .remove_relation("notes/a.md", "references", &target.id)
+            .unwrap());
+    }
+
+    /// T6 step 0: measure the existing full-rebuild write path before
+    /// considering any cache design change. Run explicitly with --ignored.
+    #[test]
+    #[ignore]
+    fn benchmark_5000_note_update() {
+        let dir = TempDir::new("cache-benchmark");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        fs::create_dir_all(dir.path().join("notes")).unwrap();
+        for i in 0..5000 {
+            let node = sample_node();
+            fs::write(
+                dir.path().join(format!("notes/{i:04}.md")),
+                render(&node, "\nbody\n").unwrap(),
+            )
+            .unwrap();
+        }
+        engine.rebuild_cache().unwrap();
+        engine
+            .git
+            .commit_all("Benchmark baseline: 5000 notes")
+            .unwrap();
+        let mut node = engine.read_node("notes/0000.md").unwrap().node;
+        node.tags.push("bench".into());
+        let start = std::time::Instant::now();
+        engine.update_node("notes/0000.md", &node).unwrap();
+        eprintln!("5000-note update_node: {:?}", start.elapsed());
     }
 
     #[test]

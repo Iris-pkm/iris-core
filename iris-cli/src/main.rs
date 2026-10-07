@@ -17,7 +17,7 @@ use clap::{Parser, Subcommand};
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{Node, NodeType, Priority, ProjectStatus};
+use iris_core::types::{Node, NodeType, Priority, ProjectStatus, Relation};
 
 #[derive(Parser)]
 #[command(name = "iris", version, about = "Scriptable client for an Iris vault")]
@@ -108,6 +108,12 @@ enum Command {
         /// Repeatable.
         #[arg(long = "remove-tag")]
         remove_tags: Vec<String>,
+        /// Repeatable: --add-relation type:target-id (or type:path/to/note.md).
+        #[arg(long = "add-relation")]
+        add_relations: Vec<String>,
+        /// Repeatable: --remove-relation type:target-id (or type:path/to/note.md).
+        #[arg(long = "remove-relation")]
+        remove_relations: Vec<String>,
         /// Replace the body outright (non-interactive). Use `edit` instead
         /// to open $EDITOR on the current body.
         #[arg(long)]
@@ -174,6 +180,8 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             clear_due_date,
             add_tags,
             remove_tags,
+            add_relations,
+            remove_relations,
             body,
         } => cmd_update(
             &cli.vault,
@@ -192,6 +200,8 @@ fn run(cli: Cli) -> Result<(), IrisError> {
                 clear_due_date,
                 add_tags,
                 remove_tags,
+                add_relations,
+                remove_relations,
                 body,
             },
         ),
@@ -317,7 +327,24 @@ struct UpdateFields {
     clear_due_date: bool,
     add_tags: Vec<String>,
     remove_tags: Vec<String>,
+    add_relations: Vec<String>,
+    remove_relations: Vec<String>,
     body: Option<String>,
+}
+
+fn relation_arg(engine: &Engine, spec: &str) -> Result<Relation, IrisError> {
+    let (rel_type, target) = spec.split_once(':').ok_or_else(|| {
+        IrisError::Validation(format!("invalid relation {spec:?} (want type:target-id)"))
+    })?;
+    let target = if target.contains('/') || target.ends_with(".md") {
+        engine.read_node(target)?.node.id
+    } else {
+        target.to_string()
+    };
+    Ok(Relation {
+        rel_type: rel_type.into(),
+        target,
+    })
 }
 
 fn parse_date(s: &str) -> Result<NaiveDate, IrisError> {
@@ -336,6 +363,20 @@ fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(
             "projects use --project-status (lifecycle), not --status".into(),
         ));
     }
+    // Validate relations before a project-status transition can write. Keep
+    // the edited set while re-reading the project after that transition.
+    let additions = fields
+        .add_relations
+        .iter()
+        .map(|s| relation_arg(&engine, s))
+        .collect::<Result<Vec<_>, _>>()?;
+    let removals = fields
+        .remove_relations
+        .iter()
+        .map(|s| relation_arg(&engine, s))
+        .collect::<Result<Vec<_>, _>>()?;
+    engine.edit_relations(&mut node, &additions, &removals)?;
+    let relations = node.relations.clone();
     // Do the state-machine move first: it validates before writing anything,
     // so an illegal transition leaves the node untouched.
     let mut moved = None;
@@ -343,6 +384,7 @@ fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(
         let target: ProjectStatus = s.parse().map_err(IrisError::Validation)?;
         let activated = engine.set_project_status(rel_path, target)?;
         node = engine.read_node(rel_path)?.node;
+        node.relations = relations;
         moved = Some((s.clone(), activated));
     }
     let only_project_status = moved.is_some()
@@ -357,6 +399,8 @@ fn cmd_update(vault: &PathBuf, rel_path: &str, fields: UpdateFields) -> Result<(
         && !fields.clear_due_date
         && fields.add_tags.is_empty()
         && fields.remove_tags.is_empty()
+        && fields.add_relations.is_empty()
+        && fields.remove_relations.is_empty()
         && fields.body.is_none();
     if only_project_status {
         let (s, activated) = moved.unwrap();

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
-use iris_core::types::{Node, NodeType, Priority, ProjectStatus};
+use iris_core::types::{Node, NodeType, Priority, ProjectStatus, Relation};
 use rmcp::{
     handler::server::wrapper::Parameters, model::*, schemars, tool, tool_handler, tool_router,
     transport::stdio, ErrorData as McpError, ServerHandler, ServiceExt,
@@ -84,9 +84,30 @@ pub struct UpdateNoteParams {
     pub add_tags: Vec<String>,
     #[serde(default)]
     pub remove_tags: Vec<String>,
+    /// Canonical relation type and target node ID; inverse labels are rejected.
+    #[serde(default)]
+    pub add_relations: Vec<RelationEdit>,
+    #[serde(default)]
+    pub remove_relations: Vec<RelationEdit>,
     /// Replace the body outright. Omit to leave it untouched.
     #[serde(default)]
     pub body: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RelationEdit {
+    #[serde(rename = "type")]
+    pub rel_type: String,
+    pub target: String,
+}
+
+impl From<RelationEdit> for Relation {
+    fn from(value: RelationEdit) -> Self {
+        Self {
+            rel_type: value.rel_type,
+            target: value.target,
+        }
+    }
 }
 
 // No stored `ToolRouter` field: `#[tool_handler]`'s default `router` param is
@@ -157,7 +178,7 @@ impl IrisMcpServer {
     }
 
     #[tool(
-        description = "Update an existing note's status, priority, domain, tags, or body. For project nodes use project_status (someday/planned/active/paused/completed/cancelled) instead of status."
+        description = "Update an existing note's status, priority, domain, tags, relations, or body. Relations use canonical types and target node IDs. For project nodes use project_status (someday/planned/active/paused/completed/cancelled) instead of status."
     )]
     fn update_note(
         &self,
@@ -172,6 +193,20 @@ impl IrisMcpServer {
                 None,
             ));
         }
+        let additions = p
+            .add_relations
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        let removals = p
+            .remove_relations
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        engine
+            .edit_relations(&mut node, &additions, &removals)
+            .map_err(to_mcp_err)?;
+        let relations = node.relations.clone();
         if let Some(s) = &p.project_status {
             let target: ProjectStatus = s
                 .parse()
@@ -180,6 +215,7 @@ impl IrisMcpServer {
                 .set_project_status(&p.path, target)
                 .map_err(to_mcp_err)?;
             node = engine.read_node(&p.path).map_err(to_mcp_err)?.node;
+            node.relations = relations;
         }
 
         if p.clear_status {

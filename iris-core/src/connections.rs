@@ -25,6 +25,23 @@ pub struct Connection {
     pub label: String,
 }
 
+/// Canonical type for a derived inverse label (ADR-017). `related-to` is
+/// symmetric and remains writable, so it is deliberately absent here.
+pub(crate) fn canonical_for_inverse(rel_type: &str) -> Option<&'static str> {
+    match rel_type {
+        "project-contains" => Some("parent_project"),
+        "children" => Some("parent"),
+        "blocked-by" => Some("blocks"),
+        "depended-on-by" => Some("depends-on"),
+        "referenced-by" => Some("references"),
+        "annotated-by" => Some("annotates"),
+        "graduated-into" => Some("graduated-from"),
+        "flow-prev" => Some("flow-next"),
+        "has-instance" => Some("instance-of"),
+        _ => None,
+    }
+}
+
 /// Every relation touching `node_id`, either direction, with a
 /// human-readable per-item label. Excludes deleted nodes on either side.
 pub fn connections(cache: &Cache, node_id: &str) -> IrisResult<Vec<Connection>> {
