@@ -7,7 +7,7 @@ A local-first, git-backed ideation station — a single place to accumulate, str
 ## What's in this repo
 
 - **`iris-core`** — the Rust engine: typed nodes, PARA organization, task views, distillation queue, guided project activation, search, import/export, a WASM plugin runtime, and the UniFFI surface every native client binds to. No UI of any kind lives here.
-- **`iris-cli`** — a scriptable command-line client (`iris` binary) over `iris-core`: `init`/`create`/`read`/`search`/`update`/`edit`/`done`/`rm`/`restore`. `update` can add/remove canonical relations by target ID or path. `iris mcp-server` exposes the vault to MCP-compatible AI agents (search/read/create/update tools) over stdio.
+- **`iris-cli`** — a scriptable command-line client (`iris` binary) over `iris-core`: `init`/`create`/`read`/`search`/`update`/`edit`/`done`/`rm`/`restore`. `update` can add/remove canonical relations by target ID or path. `iris mcp-server` exposes the vault to MCP-compatible AI agents (search/read/create/update/whoami tools) over stdio; `--read-only` refuses writes, note content is returned inside untrusted-content markers, and write tools take an `idempotency_key`.
 - **`apps/macos`** — the native SwiftUI shell (no webview), consuming `iris-core` through the real UniFFI `FfiEngine` surface. See [`apps/macos/README.md`](apps/macos/README.md) for building/running it.
 
 ## Contributing (humans and AI agents)

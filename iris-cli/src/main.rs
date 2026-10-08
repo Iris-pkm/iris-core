@@ -130,8 +130,12 @@ enum Command {
     /// Recover a soft-deleted node.
     Restore { rel_path: String },
     /// Run an MCP server over stdio, exposing this vault to external agents
-    /// (search_notes, get_note, create_note, update_note).
-    McpServer,
+    /// (search_notes, get_note, create_note, update_note, whoami).
+    McpServer {
+        /// Refuse create_note/update_note: expose the vault to read-only agents.
+        #[arg(long)]
+        read_only: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -219,9 +223,9 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             println!("Restored {rel_path}");
             Ok(())
         }
-        Command::McpServer => {
+        Command::McpServer { read_only } => {
             let rt = tokio::runtime::Runtime::new().map_err(IrisError::Io)?;
-            rt.block_on(mcp_server::serve(cli.vault))
+            rt.block_on(mcp_server::serve(cli.vault, read_only))
                 .map_err(|e| IrisError::Validation(e.to_string()))
         }
     }
