@@ -137,14 +137,23 @@ struct NodeEditorView: View {
                     .task(id: draft) {
                         guard draft != savedDraft else { return }
                         try? await Task.sleep(for: .seconds(2))
-                        if !Task.isCancelled { save() }
+                        // Never autosave over another window's version until the banner is answered.
+                        if !Task.isCancelled && !changedElsewhere { save() }
                     }
                 if changedElsewhere {
-                    Text("This note was changed in another window. Your unsaved edits will replace that version when saved.")
-                        .font(Typography.bodySmall())
-                        .foregroundStyle(c.warning)
-                        .padding(.horizontal, Space.xxxl + Space.lg)
-                        .padding(.vertical, Space.sm)
+                    HStack(spacing: Space.md) {
+                        Text("This note was changed in another window.")
+                            .font(Typography.bodySmall()).foregroundStyle(c.warning)
+                        Spacer()
+                        Button("Reload") { load(); changedElsewhere = false }
+                            .accessibilityHint("Discard my unsaved edits and show the other window's version")
+                        Button("Keep mine") { save(); changedElsewhere = false }
+                            .accessibilityHint("Save my edits over the other window's version")
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal, Space.xxxl + Space.lg)
+                    .padding(.vertical, Space.sm)
+                    .background(c.warningTint)
                 }
                 if let saveError {
                     Text("Not saved: \(saveError)")
@@ -165,8 +174,9 @@ struct NodeEditorView: View {
                 load()   // nothing unsaved here: take the other window's version
                 changedElsewhere = false
             } else {
-                // Provisional (owner hasn't picked the conflict UX, TASKS.md T5): keep the
-                // draft, say so; the autosave then overwrites the other window's edit.
+                // Unsaved edits here: keep them and ask (Reload / Keep mine banner);
+                // autosave is paused until answered. Closing the window still saves —
+                // the other window's version stays recoverable in git history.
                 changedElsewhere = true
             }
         }
