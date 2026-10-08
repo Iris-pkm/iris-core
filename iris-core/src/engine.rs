@@ -1277,6 +1277,16 @@ mod tests {
         let start = std::time::Instant::now();
         engine.update_node("notes/0000.md", &node).unwrap();
         eprintln!("5000-note update_node: {:?}", start.elapsed());
+        // Where the time goes: the two O(vault) steps on their own.
+        let t = std::time::Instant::now();
+        engine.rebuild_cache().unwrap();
+        eprintln!("  full cache rebuild alone: {:?}", t.elapsed());
+        let t = std::time::Instant::now();
+        engine.git.commit_all("Benchmark: no-op commit").unwrap();
+        eprintln!(
+            "  git commit_all alone (nothing changed): {:?}",
+            t.elapsed()
+        );
     }
 
     #[test]
