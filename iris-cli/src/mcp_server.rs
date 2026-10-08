@@ -30,8 +30,8 @@ fn text(s: String) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(s)])
 }
 
-/// Frame note content as data, not instructions — a prompt-injection guard
-/// (notes can hold web clips or pasted text). `json` is JSON-serialized, so
+/// Frame note content with an advisory untrusted-data marker (notes can hold
+/// web clips or pasted text). `json` is JSON-serialized, so
 /// newlines inside note content are escaped and can never forge the END marker
 /// line.
 fn untrusted(json: String) -> String {
@@ -62,7 +62,7 @@ pub struct PathParams {
     pub path: String,
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 pub struct CreateNoteParams {
     pub path: String,
     /// note, task, project, area, resource, event, ... Unknown values
@@ -73,8 +73,8 @@ pub struct CreateNoteParams {
     pub tags: Vec<String>,
     #[serde(default)]
     pub body: String,
-    /// A retry carrying the same key returns the first call's result instead
-    /// of acting twice.
+    /// A retry with the same key and arguments replays the first result;
+    /// different arguments are rejected.
     #[serde(default)]
     pub idempotency_key: Option<String>,
 }
@@ -82,7 +82,7 @@ fn default_note_type() -> String {
     "note".to_string()
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 pub struct UpdateNoteParams {
     pub path: String,
     #[serde(default)]
@@ -114,13 +114,13 @@ pub struct UpdateNoteParams {
     /// Replace the body outright. Omit to leave it untouched.
     #[serde(default)]
     pub body: Option<String>,
-    /// A retry carrying the same key returns the first call's result instead
-    /// of acting twice.
+    /// A retry with the same key and arguments replays the first result;
+    /// different arguments are rejected.
     #[serde(default)]
     pub idempotency_key: Option<String>,
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 pub struct RelationEdit {
     #[serde(rename = "type")]
     pub rel_type: String,
@@ -146,7 +146,7 @@ pub struct IrisMcpServer {
     read_only: bool,
     // ponytail: in-memory and per server process (stdio = one client session);
     // persist it if a long-lived multi-client transport ever lands.
-    done: Arc<Mutex<HashMap<String, String>>>,
+    done: Arc<Mutex<HashMap<String, (serde_json::Value, String)>>>,
 }
 
 #[tool_router]
@@ -159,12 +159,13 @@ impl IrisMcpServer {
         }
     }
 
-    /// Gate and dedupe a write tool: refuse in read-only mode, replay the
-    /// first result for a repeated `idempotency_key`, otherwise run `f`.
+    /// Refuse writes in read-only mode; replay matching retries and reject
+    /// a reused key with different arguments.
     fn write(
         &self,
         tool: &str,
         key: Option<&str>,
+        args: serde_json::Value,
         f: impl FnOnce() -> Result<String, McpError>,
     ) -> Result<CallToolResult, McpError> {
         if self.read_only {
@@ -180,12 +181,18 @@ impl IrisMcpServer {
             .lock()
             .map_err(|_| McpError::internal_error("idempotency lock poisoned", None))?;
         let key = key.map(|k| format!("{tool}:{k}"));
-        if let Some(prev) = key.as_ref().and_then(|k| done.get(k)) {
-            return Ok(text(prev.clone()));
+        if let Some((previous_args, previous_result)) = key.as_ref().and_then(|k| done.get(k)) {
+            if previous_args != &args {
+                return Err(McpError::invalid_params(
+                    "idempotency_key was already used with different arguments",
+                    None,
+                ));
+            }
+            return Ok(text(previous_result.clone()));
         }
         let out = f()?;
         if let Some(k) = key {
-            done.insert(k, out.clone());
+            done.insert(k, (args, out.clone()));
         }
         Ok(text(out))
     }
@@ -240,7 +247,9 @@ impl IrisMcpServer {
         Parameters(p): Parameters<CreateNoteParams>,
     ) -> Result<CallToolResult, McpError> {
         let key = p.idempotency_key.clone();
-        self.write("create_note", key.as_deref(), || {
+        let args =
+            serde_json::to_value(&p).map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        self.write("create_note", key.as_deref(), args, || {
             let mut engine = self.open()?;
             let node_type: NodeType = serde_yaml::from_str(&p.node_type)
                 .map_err(|e| McpError::invalid_params(format!("invalid node type: {e}"), None))?;
@@ -262,7 +271,9 @@ impl IrisMcpServer {
         Parameters(p): Parameters<UpdateNoteParams>,
     ) -> Result<CallToolResult, McpError> {
         let key = p.idempotency_key.clone();
-        self.write("update_note", key.as_deref(), || {
+        let args =
+            serde_json::to_value(&p).map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        self.write("update_note", key.as_deref(), args, || {
             let mut engine = self.open()?;
             let mut node = engine.read_node(&p.path).map_err(to_mcp_err)?.node;
 
@@ -403,6 +414,41 @@ mod tests {
         let retry = out(s.create_note(create("a.md", Some("k1"))).unwrap());
         assert_eq!(first, retry);
         assert!(s.create_note(create("a.md", None)).is_err());
+    }
+
+    #[test]
+    fn create_rejects_reused_key_with_different_arguments() {
+        let (s, dir) = server(false, "create-mismatch");
+        s.create_note(create("a.md", Some("k1"))).unwrap();
+        let err = s.create_note(create("b.md", Some("k1"))).unwrap_err();
+        assert!(err.message.contains("different arguments"));
+        assert!(!dir.join("b.md").exists());
+    }
+
+    #[test]
+    fn update_rejects_reused_key_with_different_arguments() {
+        let (s, dir) = server(false, "update-mismatch");
+        s.create_note(create("a.md", None)).unwrap();
+        let update = |body: &str| {
+            Parameters(
+                serde_json::from_value::<UpdateNoteParams>(serde_json::json!({
+                    "path": "a.md",
+                    "body": body,
+                    "idempotency_key": "k1"
+                }))
+                .unwrap(),
+            )
+        };
+        let first = out(s.update_note(update("first")).unwrap());
+        let err = s.update_note(update("second")).unwrap_err();
+        assert!(err.message.contains("different arguments"));
+        assert_eq!(out(s.update_note(update("first")).unwrap()), first);
+        assert!(Engine::open(dir)
+            .unwrap()
+            .read_node("a.md")
+            .unwrap()
+            .body
+            .contains("first"));
     }
 
     #[test]
