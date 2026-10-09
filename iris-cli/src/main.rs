@@ -130,7 +130,7 @@ enum Command {
     /// Recover a soft-deleted node.
     Restore { rel_path: String },
     /// Run an MCP server over stdio, exposing this vault to external agents
-    /// (search_notes, get_note, create_note, update_note, whoami).
+    /// (search_notes, get_note, create_note, update_note, get_links, whoami).
     McpServer {
         /// Refuse create_note/update_note: expose the vault to read-only agents.
         #[arg(long)]
