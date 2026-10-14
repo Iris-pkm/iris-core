@@ -9,6 +9,7 @@
 
 pub mod activation;
 pub mod cache;
+pub mod computed;
 pub mod connections;
 pub mod dependencies;
 pub mod distillation;
