@@ -52,12 +52,20 @@ struct PARAWorkbenchView: View {
         /// Only meaningful for `.areas` — the linked-note count, kept as a
         /// real `Int` rather than parsed back out of `meta`'s display text.
         var linkedCount: Int = 0
+        /// Derived values from `.iris/computed.yaml` (ADR-041), keyed by name.
+        /// Never stored in the node file; Table lens only.
+        var computed: [String: FfiComputedValue] = [:]
     }
 
     @Environment(\.colorScheme) private var colorScheme
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
     @State private var rows: [Row] = []
+    /// Union of computed-property names across `rows`, sorted — the Table
+    /// lens's extra columns. Empty when no `.iris/computed.yaml` applies.
+    @State private var computedNames: [String] = []
+    /// Set when the definitions file is malformed; the table still renders.
+    @State private var computedError: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -188,12 +196,43 @@ struct PARAWorkbenchView: View {
     // MARK: - Table
 
     private var tableView: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            if computedNames.isEmpty {
+                tableGrid
+            } else {
+                // Extra columns can exceed the window; scroll the grid sideways.
+                ScrollView(.horizontal) { tableGrid.frame(minWidth: 480 + CGFloat(computedNames.count) * 120) }
+            }
+            if let computedError {
+                Text("Computed columns unavailable: \(computedError)")
+                    .font(Typography.caption()).foregroundStyle(c.danger)
+            }
+        }
+    }
+
+    private func computedCell(_ row: Row, _ name: String) -> some View {
+        let value = row.computed[name]
+        let isError = value?.kind == "error"
+        return Text(value?.display ?? "—")
+            .font(Typography.bodySmall())
+            .foregroundStyle(isError ? c.danger : c.textSecondary)
+            .lineLimit(1)
+            .frame(width: 120, alignment: .leading)
+            .help(isError ? "Formula error — fix the definition in .iris/computed.yaml" : "Computed (derived, not stored in the file)")
+            .accessibilityLabel("\(name): \(value?.display ?? "none")")
+    }
+
+    private var tableGrid: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("Name").font(Typography.caption()).frame(maxWidth: .infinity, alignment: .leading)
                 Text(statusColumnLabel).font(Typography.caption()).frame(width: 100, alignment: .leading)
                 Text(metaColumnLabel).font(Typography.caption()).frame(width: 140, alignment: .leading)
                 Text("Tags").font(Typography.caption()).frame(width: 140, alignment: .leading)
+                ForEach(computedNames, id: \.self) { name in
+                    Text(name).font(Typography.caption()).frame(width: 120, alignment: .leading)
+                        .help("Computed property")
+                }
             }
             .foregroundStyle(c.textSecondary)
             .padding(Space.sm)
@@ -214,6 +253,7 @@ struct PARAWorkbenchView: View {
                             }
                         }
                         .frame(width: 140, alignment: .leading)
+                        ForEach(computedNames, id: \.self) { name in computedCell(row, name) }
                     }
                     .padding(Space.sm)
                     .overlay(alignment: .bottom) { Rectangle().fill(c.borderDefault).frame(height: 1) }
@@ -419,5 +459,37 @@ struct PARAWorkbenchView: View {
                 )
             }
         }
+        loadComputed()
     }
+
+    /// Fills `Row.computed` for the Table lens (ADR-041). One FFI call per
+    /// row, like the `readNode` calls above — same flagged ceiling. A bad
+    /// `computed.yaml` fails every call identically, so stop at the first
+    /// error and show it once instead of breaking the screen.
+    private func loadComputed() {
+        let today = Self.dayFormatter.string(from: Date())
+        var names = Set<String>()
+        var failure: String?
+        for i in rows.indices {
+            do {
+                let values = try engine.computedValues(relPath: rows[i].node.path, today: today)
+                rows[i].computed = Dictionary(uniqueKeysWithValues: values.map { ($0.name, $0) })
+                names.formUnion(values.map(\.name))
+            } catch {
+                failure = "\(error)"
+                break
+            }
+        }
+        if failure != nil { for i in rows.indices { rows[i].computed = [:] } }
+        computedNames = names.sorted()
+        computedError = failure
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 }
