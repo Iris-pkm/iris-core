@@ -137,6 +137,12 @@ impl Value {
                 format!("[{}]", parts.join(", "))
             }
             Self::Error(c) => format!("#error({})", c.as_str()),
+            // Display only: 4 decimals, trailing zeros trimmed (1/3 → 0.3333).
+            // `to_json` keeps full precision for machine consumers.
+            Self::Number(n) if n.fract() != 0.0 => {
+                let s = format!("{n:.4}");
+                s.trim_end_matches('0').trim_end_matches('.').to_string()
+            }
             other => match other.to_json() {
                 serde_json::Value::String(s) => s,
                 j => j.to_string(),
@@ -2068,6 +2074,18 @@ task:
         assert!(defs.for_type("task").is_empty());
         fs::write(dir.0.join(".iris/computed.yaml"), "not: [valid").unwrap();
         assert!(load(&dir.0).is_err());
+    }
+
+    #[test]
+    fn number_display_is_rounded_but_json_is_not() {
+        assert_eq!(Value::Number(100.0 / 3.0).display(), "33.3333");
+        assert_eq!(Value::Number(2.5).display(), "2.5");
+        assert_eq!(Value::Number(4.0).display(), "4");
+        assert_eq!(Value::Number(0.00001).display(), "0");
+        assert_eq!(
+            Value::Number(1.0 / 3.0).to_json().to_string(),
+            "0.3333333333333333"
+        );
     }
 
     #[test]
