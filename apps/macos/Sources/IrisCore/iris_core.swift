@@ -556,6 +556,14 @@ public protocol FfiEngineProtocol: AnyObject, Sendable {
     
     func completeTask(relPath: String) throws 
     
+    /**
+     * Evaluate the computed properties defined for this node's type
+     * (read-only; nothing is written). `today` is `YYYY-MM-DD`, supplied by
+     * the shell. A malformed `.iris/computed.yaml` is an error for this call
+     * only. Per-property failures come back as `kind == "error"` entries.
+     */
+    func computedValues(relPath: String, today: String) throws  -> [FfiComputedValue]
+    
     func connections(nodeId: String) throws  -> [Connection]
     
     func createBranch(name: String) throws 
@@ -824,6 +832,22 @@ open func completeTask(relPath: String)throws   {try rustCallWithError(FfiConver
         FfiConverterString.lower(relPath),$0
     )
 }
+}
+    
+    /**
+     * Evaluate the computed properties defined for this node's type
+     * (read-only; nothing is written). `today` is `YYYY-MM-DD`, supplied by
+     * the shell. A malformed `.iris/computed.yaml` is an error for this call
+     * only. Per-property failures come back as `kind == "error"` entries.
+     */
+open func computedValues(relPath: String, today: String)throws  -> [FfiComputedValue]  {
+    return try  FfiConverterSequenceTypeFfiComputedValue.lift(try rustCallWithError(FfiConverterTypeFfiEngineError_lift) {
+    uniffi_iris_core_fn_method_ffiengine_computed_values(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(relPath),
+        FfiConverterString.lower(today),$0
+    )
+})
 }
     
 open func connections(nodeId: String)throws  -> [Connection]  {
@@ -1767,6 +1791,105 @@ public func FfiConverterTypeFfiAnnotationAnchor_lower(_ value: FfiAnnotationAnch
 
 
 /**
+ * `plugins::InstalledPlugin` flattened for the boundary — `PathBuf` (the
+ * install directory) has no UniFFI representation, same reason every
+ * other DTO in this module exists; the native shell has no use for that
+ * path anyway, only the plugin's own declared identity/permissions/state.
+ * One evaluated computed property (ADR-041), flattened for the native shells:
+ * UniFFI has no cheap recursive enum, and a table cell only needs the type,
+ * a display string, and — for sorting — the number or the error code.
+ */
+public struct FfiComputedValue: Equatable, Hashable {
+    public var name: String
+    /**
+     * `null bool number text date datetime list error`.
+     */
+    public var kind: String
+    /**
+     * Human-readable text (`#error(divide_by_zero)` for an error).
+     */
+    public var display: String
+    /**
+     * Set when `kind == "number"`.
+     */
+    public var number: Double?
+    /**
+     * Set when `kind == "error"`: `divide_by_zero`, `type`, `null`, ...
+     */
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, 
+        /**
+         * `null bool number text date datetime list error`.
+         */kind: String, 
+        /**
+         * Human-readable text (`#error(divide_by_zero)` for an error).
+         */display: String, 
+        /**
+         * Set when `kind == "number"`.
+         */number: Double?, 
+        /**
+         * Set when `kind == "error"`: `divide_by_zero`, `type`, `null`, ...
+         */error: String?) {
+        self.name = name
+        self.kind = kind
+        self.display = display
+        self.number = number
+        self.error = error
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiComputedValue: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiComputedValue: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiComputedValue {
+        return
+            try FfiComputedValue(
+                name: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                display: FfiConverterString.read(from: &buf), 
+                number: FfiConverterOptionDouble.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiComputedValue, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.display, into: &buf)
+        FfiConverterOptionDouble.write(value.number, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiComputedValue_lift(_ buf: RustBuffer) throws -> FfiComputedValue {
+    return try FfiConverterTypeFfiComputedValue.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiComputedValue_lower(_ value: FfiComputedValue) -> RustBuffer {
+    return FfiConverterTypeFfiComputedValue.lower(value)
+}
+
+
+/**
  * `import::ImportReport` with `skipped`'s `PathBuf` as a display string —
  * `PathBuf` has no UniFFI representation, same reason every other DTO in
  * this module exists.
@@ -2134,12 +2257,6 @@ public func FfiConverterTypeFfiParsedNode_lower(_ value: FfiParsedNode) -> RustB
 }
 
 
-/**
- * `plugins::InstalledPlugin` flattened for the boundary — `PathBuf` (the
- * install directory) has no UniFFI representation, same reason every
- * other DTO in this module exists; the native shell has no use for that
- * path anyway, only the plugin's own declared identity/permissions/state.
- */
 public struct FfiPluginInfo: Equatable, Hashable {
     public var id: String
     public var name: String
@@ -3831,6 +3948,31 @@ fileprivate struct FfiConverterSequenceTypeDanglingRelation: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeFfiComputedValue: FfiConverterRustBuffer {
+    typealias SwiftType = [FfiComputedValue]
+
+    public static func write(_ value: [FfiComputedValue], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeFfiComputedValue.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [FfiComputedValue] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [FfiComputedValue]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeFfiComputedValue.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeFfiPluginInfo: FfiConverterRustBuffer {
     typealias SwiftType = [FfiPluginInfo]
 
@@ -4078,6 +4220,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_complete_task() != 65497) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_iris_core_checksum_method_ffiengine_computed_values() != 37942) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_method_ffiengine_connections() != 3574) {

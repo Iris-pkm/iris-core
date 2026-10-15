@@ -57,6 +57,10 @@ enum Command {
     Read {
         /// Path to the node, relative to the vault root.
         rel_path: String,
+        /// Also evaluate the node's computed properties (formula/rollup, ADR-041).
+        /// Derived and read-only: never stored in the file.
+        #[arg(long)]
+        computed: bool,
     },
     /// Search nodes by text, optionally narrowed by type/domain/tag. An empty
     /// query with filters (or no arguments at all) lists everything matching.
@@ -162,7 +166,7 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             tags,
             body,
         } => cmd_create(&cli.vault, &rel_path, &node_type, tags, body),
-        Command::Read { rel_path } => cmd_read(&cli.vault, &rel_path, cli.json),
+        Command::Read { rel_path, computed } => cmd_read(&cli.vault, &rel_path, computed, cli.json),
         Command::Search {
             query,
             node_type,
@@ -266,19 +270,47 @@ fn cmd_create(
     Ok(())
 }
 
-fn cmd_read(vault: &PathBuf, rel_path: &str, json: bool) -> Result<(), IrisError> {
+fn cmd_read(vault: &PathBuf, rel_path: &str, computed: bool, json: bool) -> Result<(), IrisError> {
     let engine = Engine::open(vault)?;
     let parsed = engine.read_node(rel_path)?;
+    let values = if computed {
+        Some(engine.computed_values(rel_path, iris_core::computed::today_local())?)
+    } else {
+        None
+    };
     if json {
-        let out = serde_json::json!({
+        let mut out = serde_json::json!({
             "node": parsed.node,
             "body": parsed.body,
         });
+        if let Some(values) = &values {
+            out["computed"] = values_json(values);
+        }
         println!("{}", serde_json::to_string_pretty(&out).unwrap());
     } else {
         println!("---\n{}\n---{}", parsed.raw_frontmatter, parsed.body);
+        if let Some(values) = &values {
+            println!("\n# computed (derived, not stored in the file)");
+            if values.is_empty() {
+                println!("(none defined for this node type)");
+            }
+            for (name, v) in values {
+                println!("{name}: {}", v.display());
+            }
+        }
     }
     Ok(())
+}
+
+fn values_json(
+    values: &std::collections::BTreeMap<String, iris_core::computed::Value>,
+) -> serde_json::Value {
+    serde_json::Value::Object(
+        values
+            .iter()
+            .map(|(k, v)| (k.clone(), v.to_json()))
+            .collect(),
+    )
 }
 
 fn cmd_search(

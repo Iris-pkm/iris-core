@@ -220,11 +220,29 @@ impl IrisMcpServer {
         )))
     }
 
-    #[tool(description = "Read a note's frontmatter and body by vault-relative path.")]
+    #[tool(
+        description = "Read a note's frontmatter and body by vault-relative path. Also returns `computed`: read-only derived values (formula/rollup) defined for the note's type — they are never part of the file and cannot be written."
+    )]
     fn get_note(&self, Parameters(p): Parameters<PathParams>) -> Result<CallToolResult, McpError> {
         let engine = self.open()?;
         let parsed = engine.read_node(&p.path).map_err(to_mcp_err)?;
-        let out = serde_json::json!({"node": parsed.node, "body": parsed.body});
+        let mut out = serde_json::json!({"node": parsed.node, "body": parsed.body});
+        // Computed properties (ADR-041): derived at read time, read-only, never in the file.
+        // A bad computed.yaml must not break reading the note, so it is reported alongside.
+        match engine.computed_values(&p.path, iris_core::computed::today_local()) {
+            Ok(values) => {
+                out["computed"] = serde_json::Value::Object(
+                    values
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.to_json()))
+                        .collect(),
+                );
+            }
+            Err(e) => {
+                out["computed"] = serde_json::json!({});
+                out["computed_error"] = serde_json::json!(e.to_string());
+            }
+        }
         Ok(text(untrusted(out.to_string())))
     }
 
@@ -494,6 +512,57 @@ mod tests {
             .map(|call| call.join().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(results, ["Created a.md", "Created a.md"]);
+    }
+
+    /// The JSON between the untrusted-content markers.
+    fn framed_json(text: &str) -> serde_json::Value {
+        let marker = "BEGIN UNTRUSTED CONTENT -----\n";
+        let start = text.find(marker).unwrap() + marker.len();
+        let end = text.rfind("\n----- END").unwrap();
+        serde_json::from_str(&text[start..end]).unwrap()
+    }
+
+    #[test]
+    fn get_note_returns_read_only_computed_values_and_survives_a_bad_definitions_file() {
+        let (s, dir) = server(false, "computed");
+        s.create_note(create("a.md", None)).unwrap();
+        let get = || {
+            framed_json(&out(s
+                .get_note(Parameters(PathParams {
+                    path: "a.md".into(),
+                }))
+                .unwrap()))
+        };
+        // No definitions: `computed` is present and empty (additive; node/body unchanged).
+        let v = get();
+        assert_eq!(v["computed"], serde_json::json!({}));
+        assert!(v["node"]["id"].is_string() && v["body"].is_string());
+
+        std::fs::write(
+            dir.join(".iris/computed.yaml"),
+            "note:\n  - name: two\n    kind: formula\n    expr: 1 + 1\n  - name: bad\n    kind: formula\n    expr: 1 / 0\n",
+        )
+        .unwrap();
+        let v = get();
+        assert_eq!(v["computed"]["two"], 2);
+        assert_eq!(
+            v["computed"]["bad"],
+            serde_json::json!({"error": "divide_by_zero"})
+        );
+        // Derived only: the note file never contains it.
+        assert!(!std::fs::read_to_string(dir.join("a.md"))
+            .unwrap()
+            .contains("two:"));
+
+        // A malformed definitions file is reported, and the note is still readable.
+        std::fs::write(dir.join(".iris/computed.yaml"), "note: [").unwrap();
+        let v = get();
+        assert_eq!(v["computed"], serde_json::json!({}));
+        assert!(v["computed_error"]
+            .as_str()
+            .unwrap()
+            .contains("computed.yaml"));
+        assert!(v["node"]["id"].is_string());
     }
 
     #[test]

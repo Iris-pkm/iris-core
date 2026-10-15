@@ -65,6 +65,22 @@ pub enum ErrorCode {
     Unavailable,
 }
 
+impl ErrorCode {
+    /// Stable snake_case name, used on every surface (CLI, MCP, FFI).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DivideByZero => "divide_by_zero",
+            Self::Type => "type",
+            Self::Null => "null",
+            Self::Number => "number",
+            Self::Cycle => "cycle",
+            Self::Depth => "depth",
+            Self::Chained => "chained",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,
@@ -75,6 +91,58 @@ pub enum Value {
     DateTime(DateTime<Utc>),
     List(Vec<Value>),
     Error(ErrorCode),
+}
+
+impl Value {
+    /// Short type name: `null bool number text date datetime list error`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Null => "null",
+            Self::Bool(_) => "bool",
+            Self::Number(_) => "number",
+            Self::Text(_) => "text",
+            Self::Date(_) => "date",
+            Self::DateTime(_) => "datetime",
+            Self::List(_) => "list",
+            Self::Error(_) => "error",
+        }
+    }
+
+    /// JSON form for the CLI and MCP. Dates are `YYYY-MM-DD`, datetimes RFC 3339,
+    /// whole numbers print as integers, and an error is `{"error": "<code>"}`.
+    pub fn to_json(&self) -> serde_json::Value {
+        use serde_json::json;
+        match self {
+            Self::Null => serde_json::Value::Null,
+            Self::Bool(b) => json!(b),
+            Self::Number(n) if n.fract() == 0.0 && n.abs() < 1e15 => json!(*n as i64),
+            Self::Number(n) => json!(n),
+            Self::Text(s) => json!(s),
+            Self::Date(d) => json!(d.to_string()),
+            Self::DateTime(dt) => json!(dt.to_rfc3339()),
+            Self::List(items) => {
+                serde_json::Value::Array(items.iter().map(Self::to_json).collect())
+            }
+            Self::Error(c) => json!({ "error": c.as_str() }),
+        }
+    }
+
+    /// Human-readable text (CLI default output, FFI display string).
+    pub fn display(&self) -> String {
+        match self {
+            Self::Null => "null".into(),
+            Self::Text(s) => s.clone(),
+            Self::List(items) => {
+                let parts: Vec<String> = items.iter().map(Self::display).collect();
+                format!("[{}]", parts.join(", "))
+            }
+            Self::Error(c) => format!("#error({})", c.as_str()),
+            other => match other.to_json() {
+                serde_json::Value::String(s) => s,
+                j => j.to_string(),
+            },
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1265,6 +1333,13 @@ fn aggregate(func: RollupFn, values: Vec<Value>) -> Value {
     }
 }
 
+/// The caller-side "today" for shells that have no date of their own: the
+/// machine's local calendar date. The evaluator itself never reads the clock
+/// (ADR-041); only callers do.
+pub fn today_local() -> NaiveDate {
+    chrono::Local::now().date_naive()
+}
+
 /// Evaluate every computed property defined for `node_id`'s type.
 ///
 /// Read-only: it never writes a file or the cache. `today` is supplied by the
@@ -1993,6 +2068,39 @@ task:
         assert!(defs.for_type("task").is_empty());
         fs::write(dir.0.join(".iris/computed.yaml"), "not: [valid").unwrap();
         assert!(load(&dir.0).is_err());
+    }
+
+    #[test]
+    fn value_json_and_display_forms_are_stable() {
+        use serde_json::json;
+        let cases: Vec<(Value, serde_json::Value, &str)> = vec![
+            (Value::Null, json!(null), "null"),
+            (Value::Bool(true), json!(true), "true"),
+            (Value::Number(3.0), json!(3), "3"),
+            (Value::Number(2.5), json!(2.5), "2.5"),
+            (Value::Text("hi".into()), json!("hi"), "hi"),
+            (
+                Value::Date(d("2026-01-15")),
+                json!("2026-01-15"),
+                "2026-01-15",
+            ),
+            (
+                Value::List(vec![Value::Number(1.0), Value::Text("a".into())]),
+                json!([1, "a"]),
+                "[1, a]",
+            ),
+            (
+                Value::Error(ErrorCode::DivideByZero),
+                json!({"error": "divide_by_zero"}),
+                "#error(divide_by_zero)",
+            ),
+        ];
+        for (v, j, shown) in cases {
+            assert_eq!(v.to_json(), j, "{v:?}");
+            assert_eq!(v.display(), shown, "{v:?}");
+        }
+        assert_eq!(Value::Date(jan15()).kind(), "date");
+        assert_eq!(Value::Error(ErrorCode::Type).kind(), "error");
     }
 
     #[test]

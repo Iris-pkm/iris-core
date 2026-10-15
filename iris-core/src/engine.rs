@@ -709,6 +709,23 @@ impl Engine {
         self.cache.rebuild(&self.vault)
     }
 
+    /// Evaluate the computed properties (ADR-041) defined for a node's type.
+    ///
+    /// Read-only: loads `.iris/computed.yaml`, evaluates over the cache and the
+    /// vault, and writes nothing. `today` is supplied by the caller. A malformed
+    /// `computed.yaml` is an `Err` for *this call only* — it never affects
+    /// opening the vault or any write. Per-property failures come back as
+    /// `Value::Error` entries in the map.
+    pub fn computed_values(
+        &self,
+        rel_path: impl AsRef<Path>,
+        today: chrono::NaiveDate,
+    ) -> IrisResult<std::collections::BTreeMap<String, crate::computed::Value>> {
+        let defs = crate::computed::load(self.vault.root())?;
+        let id = self.vault.read_node(rel_path.as_ref())?.node.id;
+        crate::computed::evaluate(&self.vault, &self.cache, &defs, &id, today)
+    }
+
     /// Run the vault integrity checker.
     pub fn check_integrity(&self) -> IrisResult<IntegrityReport> {
         integrity::check(&self.vault)
@@ -1287,6 +1304,51 @@ mod tests {
             "  git commit_all alone (nothing changed): {:?}",
             t.elapsed()
         );
+    }
+
+    #[test]
+    fn computed_values_come_from_definitions_and_are_never_written() {
+        let dir = TempDir::new("computed-engine");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        // No definitions yet: empty, not an error.
+        engine
+            .create_node("p.md", &Node::new(NodeType::Project), "\n")
+            .unwrap();
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        assert!(engine.computed_values("p.md", today).unwrap().is_empty());
+
+        fs::write(
+            dir.path().join(".iris/computed.yaml"),
+            "project:\n  - name: n_tasks\n    kind: rollup\n    relation: parent_project\n    direction: in\n    fn: count\n",
+        )
+        .unwrap();
+        let project_id = engine.read_node("p.md").unwrap().node.id;
+        let mut task = Node::new(NodeType::Task);
+        task.relations.push(crate::types::Relation {
+            rel_type: "parent_project".into(),
+            target: project_id,
+        });
+        engine.create_node("t.md", &task, "\n").unwrap();
+        let out = engine.computed_values("p.md", today).unwrap();
+        assert_eq!(out["n_tasks"], crate::computed::Value::Number(1.0));
+
+        // Later writes never persist a computed value into any node file.
+        let mut project = engine.read_node("p.md").unwrap().node;
+        project.tags.push("x".into());
+        engine.update_node("p.md", &project).unwrap();
+        for f in ["p.md", "t.md"] {
+            let text = fs::read_to_string(dir.path().join(f)).unwrap();
+            assert!(
+                !text.contains("n_tasks"),
+                "{f} must not contain a computed name"
+            );
+        }
+
+        // A malformed definitions file fails this call only; the vault still opens and writes.
+        fs::write(dir.path().join(".iris/computed.yaml"), "project: [").unwrap();
+        assert!(engine.computed_values("p.md", today).is_err());
+        engine.update_node("p.md", &project).unwrap();
+        assert!(Engine::open(dir.path()).is_ok());
     }
 
     #[test]

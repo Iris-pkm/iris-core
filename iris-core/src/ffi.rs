@@ -514,6 +514,22 @@ impl From<crate::import::ImportReport> for FfiImportReport {
 /// install directory) has no UniFFI representation, same reason every
 /// other DTO in this module exists; the native shell has no use for that
 /// path anyway, only the plugin's own declared identity/permissions/state.
+/// One evaluated computed property (ADR-041), flattened for the native shells:
+/// UniFFI has no cheap recursive enum, and a table cell only needs the type,
+/// a display string, and — for sorting — the number or the error code.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct FfiComputedValue {
+    pub name: String,
+    /// `null bool number text date datetime list error`.
+    pub kind: String,
+    /// Human-readable text (`#error(divide_by_zero)` for an error).
+    pub display: String,
+    /// Set when `kind == "number"`.
+    pub number: Option<f64>,
+    /// Set when `kind == "error"`: `divide_by_zero`, `type`, `null`, ...
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct FfiPluginInfo {
     pub id: String,
@@ -921,6 +937,38 @@ impl FfiEngine {
             self.lock().cache(),
             &node_id,
         )?)
+    }
+
+    // -- computed properties (`computed.rs`, ADR-041) --
+
+    /// Evaluate the computed properties defined for this node's type
+    /// (read-only; nothing is written). `today` is `YYYY-MM-DD`, supplied by
+    /// the shell. A malformed `.iris/computed.yaml` is an error for this call
+    /// only. Per-property failures come back as `kind == "error"` entries.
+    pub fn computed_values(
+        &self,
+        rel_path: String,
+        today: String,
+    ) -> Result<Vec<FfiComputedValue>, FfiEngineError> {
+        use crate::computed::Value;
+        let today = from_iso_date("today", &today).map_err(ffi_conv_err)?;
+        let values = self.lock().computed_values(&rel_path, today)?;
+        Ok(values
+            .into_iter()
+            .map(|(name, v)| FfiComputedValue {
+                name,
+                kind: v.kind().to_string(),
+                display: v.display(),
+                number: match &v {
+                    Value::Number(n) => Some(*n),
+                    _ => None,
+                },
+                error: match &v {
+                    Value::Error(c) => Some(c.as_str().to_string()),
+                    _ => None,
+                },
+            })
+            .collect())
     }
 
     // -- plugin runtime v1 (`plugins.rs`, ADR-034) --
@@ -1343,6 +1391,72 @@ mod tests {
             conns[0].direction,
             crate::connections::ConnectionDirection::Incoming
         );
+    }
+
+    #[test]
+    fn ffi_engine_computed_values_round_trip_and_reject_a_bad_date() {
+        let dir = TempDir::new("computed-ffi");
+        let engine = FfiEngine::init(dir.path().to_string_lossy().into_owned()).unwrap();
+        let mut project = sample_node();
+        project.node_type = NodeType::Project;
+        project.relations = vec![];
+        engine
+            .create_node(
+                "projects/p.md".to_string(),
+                FfiNode::from(&project),
+                "\n".to_string(),
+            )
+            .unwrap();
+        let project_id = engine
+            .read_node("projects/p.md".to_string())
+            .unwrap()
+            .node
+            .id;
+        let mut task = sample_node();
+        task.node_type = NodeType::Task;
+        task.relations = vec![crate::types::Relation {
+            rel_type: "parent_project".to_string(),
+            target: project_id,
+        }];
+        engine
+            .create_node(
+                "tasks/t.md".to_string(),
+                FfiNode::from(&task),
+                "\n".to_string(),
+            )
+            .unwrap();
+        std::fs::write(
+            dir.path().join(".iris/computed.yaml"),
+            "project:\n  - name: n\n    kind: rollup\n    relation: parent_project\n    direction: in\n    fn: count\n  - name: label\n    kind: formula\n    expr: concat(\"p-\", 7)\n  - name: bad\n    kind: formula\n    expr: 1 / 0\n",
+        )
+        .unwrap();
+
+        let got = engine
+            .computed_values("projects/p.md".to_string(), "2026-01-15".to_string())
+            .unwrap();
+        let by = |n: &str| got.iter().find(|v| v.name == n).unwrap().clone();
+        assert_eq!(
+            (by("n").kind.as_str(), by("n").number),
+            ("number", Some(1.0))
+        );
+        assert_eq!(
+            (by("label").kind.as_str(), by("label").display.as_str()),
+            ("text", "p-7")
+        );
+        assert_eq!(by("bad").kind, "error");
+        assert_eq!(by("bad").error.as_deref(), Some("divide_by_zero"));
+        // Result is sorted by name (BTreeMap order) so shells get a stable column order.
+        assert_eq!(
+            got.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(),
+            ["bad", "label", "n"]
+        );
+
+        assert!(engine
+            .computed_values("projects/p.md".to_string(), "not-a-date".to_string())
+            .is_err());
+        assert!(engine
+            .computed_values("missing.md".to_string(), "2026-01-15".to_string())
+            .is_err());
     }
 
     #[test]
