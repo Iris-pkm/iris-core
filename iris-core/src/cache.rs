@@ -4,6 +4,7 @@
 //! the vault at any time with no data loss — `rebuild()` is the only way rows
 //! get into it.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use rusqlite::Connection;
@@ -114,6 +115,7 @@ impl Cache {
         tx.execute("DELETE FROM nodes", []).map_err(sqlite_err)?;
         tx.execute("DELETE FROM relations", [])
             .map_err(sqlite_err)?;
+        let mut seen_ids = HashSet::new();
 
         for path in vault.scan()? {
             // A malformed file is quarantined (skipped), never allowed to abort
@@ -121,6 +123,9 @@ impl Cache {
             let Ok(parsed) = vault.read_node(&path) else {
                 continue;
             };
+            if !seen_ids.insert(parsed.node.id.clone()) {
+                continue;
+            }
             let rel_path = path
                 .strip_prefix(vault.root())
                 .unwrap_or(&path)
@@ -356,6 +361,27 @@ broken.
         let nodes = cache.list_nodes().unwrap();
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].id, "01JQZ8XYABCDEF0123456789AB");
+    }
+
+    #[test]
+    fn rebuild_skips_duplicate_id_and_its_relations() {
+        let dir = TempDir::new("duplicate-id");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        let duplicate = TASK.replace("01JQZ8TASKID000000000000EF", "01JQZ8XYABCDEF0123456789AB");
+        vault.write_node("tasks/z.md", &duplicate).unwrap();
+
+        let mut cache = Cache::open_in_memory().unwrap();
+        cache.rebuild(&vault).unwrap();
+        let nodes = cache.list_nodes().unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].path, "notes/a.md");
+        let relations: i64 = cache
+            .conn
+            .query_row("SELECT COUNT(*) FROM relations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(relations, 0);
+        assert!(dir.path().join("tasks/z.md").exists());
     }
 
     #[test]

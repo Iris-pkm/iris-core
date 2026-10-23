@@ -61,6 +61,7 @@ struct LogbookView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     private func byProject() -> [(String, Int)] {

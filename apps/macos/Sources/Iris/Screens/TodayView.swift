@@ -79,6 +79,7 @@ struct TodayView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     private func groupLabel(_ text: String) -> some View {

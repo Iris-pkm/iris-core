@@ -559,6 +559,12 @@ impl Definitions {
         self.by_type.get(node_type).map_or(&[], Vec::as_slice)
     }
 
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &Computed)> {
+        self.by_type
+            .iter()
+            .flat_map(|(ty, values)| values.iter().map(move |value| (ty.as_str(), value)))
+    }
+
     fn get(&self, node_type: &str, name: &str) -> Option<&Computed> {
         self.for_type(node_type).iter().find(|c| c.name == name)
     }

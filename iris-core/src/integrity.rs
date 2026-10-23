@@ -4,13 +4,13 @@
 //! walk itself — a malformed file is quarantined (reported, skipped), never
 //! allowed to crash the check or silently vanish.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::error::IrisResult;
 use crate::types::NodeType;
 use crate::vault::Vault;
 
-/// A file whose frontmatter failed to parse.
+/// A file excluded from the cache because it cannot be parsed or has a duplicate id.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MalformedFile {
     pub path: String,
@@ -60,16 +60,28 @@ impl IntegrityReport {
 pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
     let mut report = IntegrityReport::default();
     let mut parsed = Vec::new();
+    let mut seen_ids = HashMap::<String, String>::new();
 
     for path in vault.scan()? {
+        let rel_path = path
+            .strip_prefix(vault.root())
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .into_owned();
         match vault.read_node(&path) {
-            Ok(node) => parsed.push(node),
+            Ok(node) => {
+                if let Some(first) = seen_ids.get(&node.node.id) {
+                    report.malformed_files.push(MalformedFile {
+                        path: rel_path,
+                        error: format!("duplicate id {} (first in {first})", node.node.id),
+                    });
+                } else {
+                    seen_ids.insert(node.node.id.clone(), rel_path);
+                    parsed.push(node);
+                }
+            }
             Err(e) => report.malformed_files.push(MalformedFile {
-                path: path
-                    .strip_prefix(vault.root())
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .into_owned(),
+                path: rel_path,
                 error: e.to_string(),
             }),
         }
@@ -338,5 +350,19 @@ relations:\n  - type: annotates\n    target: 01JQZ8ANNOTID00000000000AB\n\
         assert!(report.malformed_files[0].path.contains("bad.md"));
         // The good file was still processed despite the bad one existing.
         assert!(report.dangling_relations.is_empty());
+    }
+
+    #[test]
+    fn reports_duplicate_id_with_both_paths() {
+        let dir = TempDir::new("duplicate-id");
+        let vault = Vault::create(dir.path()).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault.write_node("notes/z.md", NOTE).unwrap();
+
+        let report = check(&vault).unwrap();
+        assert!(!report.is_clean());
+        assert_eq!(report.malformed_files.len(), 1);
+        assert_eq!(report.malformed_files[0].path, "notes/z.md");
+        assert!(report.malformed_files[0].error.contains("notes/a.md"));
     }
 }

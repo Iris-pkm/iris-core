@@ -66,6 +66,7 @@ struct InboxView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     /// A real "File…" needs a project picker, not a bare click action —

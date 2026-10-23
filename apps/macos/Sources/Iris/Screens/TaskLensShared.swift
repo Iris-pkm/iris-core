@@ -1,5 +1,23 @@
 import SwiftUI
 import IrisCore
+import Combine
+
+private struct VaultChangeRefresh: ViewModifier {
+    @EnvironmentObject private var session: VaultSession
+    let reload: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onReceive(session.$change.compactMap { $0 }.debounce(for: .milliseconds(150), scheduler: RunLoop.main)) { _ in
+            reload()
+        }
+    }
+}
+
+extension View {
+    func refreshOnVaultChange(_ reload: @escaping () -> Void) -> some View {
+        modifier(VaultChangeRefresh(reload: reload))
+    }
+}
 
 /// The five task-view lenses (`design/canvas/Inbox.dc.html` /
 /// `Today.dc.html` / `Upcoming.dc.html` / `SomedayMaybe.dc.html` /

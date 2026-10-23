@@ -42,6 +42,7 @@ struct ReadingListView: View {
             Divider().background(c.borderDefault)
             rail
         }.background(c.bgCanvas).task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     private var addPopover: some View {

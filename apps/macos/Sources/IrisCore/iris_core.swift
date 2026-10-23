@@ -2519,7 +2519,7 @@ public func FfiConverterTypeIntegrityReport_lower(_ value: IntegrityReport) -> R
 
 
 /**
- * A file whose frontmatter failed to parse.
+ * A file excluded from the cache because it cannot be parsed or has a duplicate id.
  */
 public struct MalformedFile: Equatable, Hashable {
     public var path: String

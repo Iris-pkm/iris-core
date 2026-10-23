@@ -67,6 +67,7 @@ struct UpcomingView: View {
         }
         .background(c.bgCanvas)
         .task(id: window) { load() }
+        .refreshOnVaultChange { load() }
     }
 
     private var windowSegmented: some View {

@@ -47,6 +47,7 @@ impl Vault {
     pub fn scan(&self) -> IrisResult<Vec<PathBuf>> {
         let mut found = Vec::new();
         scan_dir(&self.root, &mut found)?;
+        found.sort();
         Ok(found)
     }
 

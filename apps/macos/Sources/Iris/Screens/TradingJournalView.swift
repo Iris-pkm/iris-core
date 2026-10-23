@@ -51,6 +51,7 @@ struct TradingJournalView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     private var header: some View {

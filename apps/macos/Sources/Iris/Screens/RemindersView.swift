@@ -45,6 +45,7 @@ struct RemindersView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
         .sheet(isPresented: $showNewReminder) { newReminderSheet }
     }
 

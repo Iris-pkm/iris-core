@@ -22,12 +22,19 @@ struct ConnectionsPanel: View {
     let relPath: String
 
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var session: VaultSession
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
     @State private var connections: [Connection] = []
+    @State private var computed: [FfiComputedValue] = []
+    @State private var computedError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
+            if !computed.isEmpty || computedError != nil {
+                ComputedValuesSection(values: computed, error: computedError)
+                Divider().background(c.borderDefault)
+            }
             if connections.isEmpty {
                 Text("No connections yet.")
                     .font(Typography.bodySmall())
@@ -57,6 +64,9 @@ struct ConnectionsPanel: View {
             Spacer()
         }
         .task(id: relPath) { load() }
+        .onReceive(session.$change) { change in
+            if change != nil { load() }
+        }
     }
 
     /// A simplified radial illustration — real connection count, decorative
@@ -102,8 +112,58 @@ struct ConnectionsPanel: View {
     private func load() {
         guard let parsed = try? engine.readNode(relPath: relPath) else {
             connections = []
+            computed = []
+            computedError = nil
             return
         }
         connections = (try? engine.connections(nodeId: parsed.node.id)) ?? []
+        let today = Self.dayFormatter.string(from: Date())
+        do {
+            computed = try engine.computedValues(relPath: relPath, today: today)
+            computedError = nil
+        } catch {
+            computed = []
+            computedError = "\(error)"
+        }
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+struct ComputedValuesSection: View {
+    let values: [FfiComputedValue]
+    let error: String?
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var c: Palette.Colors { Palette.colors(for: colorScheme) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text("COMPUTED")
+                .font(Typography.caption())
+                .foregroundStyle(c.textSecondary)
+            ForEach(values, id: \.name) { value in
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                    Text(value.name).foregroundStyle(c.textSecondary)
+                    Spacer(minLength: 0)
+                    Text(value.display)
+                        .foregroundStyle(value.kind == "error" ? c.danger : c.textPrimary)
+                }
+                .font(Typography.bodySmall())
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(value.name): \(value.display)")
+            }
+            if let error {
+                Text("Computed values unavailable: \(error)")
+                    .font(Typography.bodySmall())
+                    .foregroundStyle(c.danger)
+            }
+        }
     }
 }

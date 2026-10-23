@@ -9,11 +9,12 @@
 mod mcp_server;
 
 use std::io::Read as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
+use iris_core::computed;
 use iris_core::engine::Engine;
 use iris_core::error::IrisError;
 use iris_core::search::{self, SearchFilters};
@@ -61,6 +62,11 @@ enum Command {
         /// Derived and read-only: never stored in the file.
         #[arg(long)]
         computed: bool,
+    },
+    /// Validate `.iris/computed.yaml` without evaluating any nodes.
+    Computed {
+        #[command(subcommand)]
+        command: ComputedCommand,
     },
     /// Search nodes by text, optionally narrowed by type/domain/tag. An empty
     /// query with filters (or no arguments at all) lists everything matching.
@@ -142,6 +148,12 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum ComputedCommand {
+    /// Check syntax, definitions and dependency cycles.
+    Check,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
@@ -167,6 +179,9 @@ fn run(cli: Cli) -> Result<(), IrisError> {
             body,
         } => cmd_create(&cli.vault, &rel_path, &node_type, tags, body),
         Command::Read { rel_path, computed } => cmd_read(&cli.vault, &rel_path, computed, cli.json),
+        Command::Computed {
+            command: ComputedCommand::Check,
+        } => cmd_computed_check(&cli.vault, cli.json),
         Command::Search {
             query,
             node_type,
@@ -233,6 +248,38 @@ fn run(cli: Cli) -> Result<(), IrisError> {
                 .map_err(|e| IrisError::Validation(e.to_string()))
         }
     }
+}
+
+fn cmd_computed_check(vault: &Path, json: bool) -> Result<(), IrisError> {
+    let defs = computed::load(vault)?;
+    let entries: Vec<_> = defs
+        .entries()
+        .map(|(ty, value)| {
+            (
+                ty,
+                value.name.as_str(),
+                if value.is_rollup() {
+                    "rollup"
+                } else {
+                    "formula"
+                },
+            )
+        })
+        .collect();
+    if json {
+        let values: Vec<_> = entries
+            .iter()
+            .map(|(ty, name, kind)| serde_json::json!({ "type": ty, "name": name, "kind": kind }))
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&values).unwrap());
+    } else if entries.is_empty() {
+        println!("No computed properties defined.");
+    } else {
+        for (ty, name, kind) in entries {
+            println!("{ty}.{name}: {kind}");
+        }
+    }
+    Ok(())
 }
 
 fn cmd_create(

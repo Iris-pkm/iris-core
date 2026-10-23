@@ -62,6 +62,7 @@ struct SomedayMaybeView: View {
         }
         .background(c.bgCanvas)
         .task { load() }
+        .refreshOnVaultChange { load() }
     }
 
     /// A real `DatePicker` popover, not a bare "Schedule…" click action —

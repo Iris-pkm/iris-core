@@ -1027,6 +1027,24 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_id_does_not_block_open_or_save() {
+        let dir = TempDir::new("duplicate-id");
+        let mut engine = Engine::init(dir.path()).unwrap();
+        engine
+            .create_node("notes/a.md", &sample_node(), "\nFirst.\n")
+            .unwrap();
+        fs::copy(dir.path().join("notes/a.md"), dir.path().join("notes/z.md")).unwrap();
+
+        let mut engine = Engine::open(dir.path()).unwrap();
+        engine.rebuild_cache().unwrap();
+        engine
+            .create_node("notes/new.md", &sample_node(), "\nNew.\n")
+            .unwrap();
+        assert_eq!(engine.cache().list_nodes().unwrap().len(), 2);
+        assert_eq!(engine.check_integrity().unwrap().malformed_files.len(), 1);
+    }
+
+    #[test]
     fn create_read_update_delete_round_trip() {
         let dir = TempDir::new("crud");
         let mut engine = Engine::init(dir.path()).unwrap();
@@ -1294,10 +1312,19 @@ mod tests {
         let start = std::time::Instant::now();
         engine.update_node("notes/0000.md", &node).unwrap();
         eprintln!("5000-note update_node: {:?}", start.elapsed());
-        // Where the time goes: the two O(vault) steps on their own.
+        node.tags.push("bench2".into());
+        let old = engine.read_node("notes/0000.md").unwrap();
+        let frontmatter = crate::parser::merge_frontmatter(&old.raw_frontmatter, &node).unwrap();
+        let contents = format!("---\n{frontmatter}\n---{}", old.body);
+        let t = std::time::Instant::now();
+        engine.vault.write_node("notes/0000.md", &contents).unwrap();
+        eprintln!("  canonical file write: {:?}", t.elapsed());
         let t = std::time::Instant::now();
         engine.rebuild_cache().unwrap();
-        eprintln!("  full cache rebuild alone: {:?}", t.elapsed());
+        eprintln!("  full cache rebuild: {:?}", t.elapsed());
+        let t = std::time::Instant::now();
+        engine.git.commit_all("Benchmark: second update").unwrap();
+        eprintln!("  git commit_all with one changed file: {:?}", t.elapsed());
         let t = std::time::Instant::now();
         engine.git.commit_all("Benchmark: no-op commit").unwrap();
         eprintln!(

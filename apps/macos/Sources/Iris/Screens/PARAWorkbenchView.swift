@@ -93,6 +93,7 @@ struct PARAWorkbenchView: View {
             if mode == .board && category != .projects { mode = .list }
             load()
         }
+        .refreshOnVaultChange { load() }
     }
 
     private var header: some View {

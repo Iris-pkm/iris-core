@@ -14,11 +14,14 @@ struct ProjectView: View {
     let onOpenNode: (CachedNode) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var session: VaultSession
     private var c: Palette.Colors { Palette.colors(for: colorScheme) }
 
     @State private var parsed: FfiParsedNode?
     @State private var environment: ActivationEnvironment?
     @State private var blockerNames: [String: String] = [:]
+    @State private var computed: [FfiComputedValue] = []
+    @State private var computedError: String?
     /// "View all" on the Distillation queue card pushes here — a local nav
     /// state rather than routing through `AppShell`, since this is purely
     /// a drill-down within the Project's own route (mockup: breadcrumb
@@ -50,6 +53,10 @@ struct ProjectView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         if let parsed {
                             header(for: parsed.node)
+                            if !computed.isEmpty || computedError != nil {
+                                ComputedValuesSection(values: computed, error: computedError)
+                                    .padding(EdgeInsets(top: Space.lg, leading: Space.xxl, bottom: 0, trailing: Space.xxl))
+                            }
 
                             if parsed.node.projectStatus == .active {
                                 activationBanner
@@ -66,6 +73,9 @@ struct ProjectView: View {
         }
         .id(relPath)
         .task(id: relPath) { load() }
+        .onReceive(session.$change) { change in
+            if change != nil { load() }
+        }
     }
 
     // MARK: - Header (shared by both layouts)
@@ -337,9 +347,19 @@ struct ProjectView: View {
     private func load() {
         guard let result = try? engine.readNode(relPath: relPath) else {
             parsed = nil
+            computed = []
+            computedError = nil
             return
         }
         parsed = result
+        let today = Self.dayFormatter.string(from: Date())
+        do {
+            computed = try engine.computedValues(relPath: relPath, today: today)
+            computedError = nil
+        } catch {
+            computed = []
+            computedError = "\(error)"
+        }
         if result.node.projectStatus == .active {
             let env = try? engine.activationEnvironment(projectId: result.node.id)
             environment = env
@@ -354,4 +374,12 @@ struct ProjectView: View {
             blockerNames = [:]
         }
     }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
