@@ -51,13 +51,14 @@ xcodebuild -create-xcframework \
 ```bash
 cd apps/macos && swift test
 ```
-Covers the `IrisMarkdown` target (Markdown → blocks parser behind the Node Editor's Preview mode). UI itself is not unit-tested; see `design/QA_CHECKLIST.md`.
+Covers `IrisMarkdown` (14 Markdown block tests) and `IrisVaultWatch` (path filtering, burst/self-echo rules, and concurrent rebuilds through two FFI engines: 4 tests). UI and the FSEvents stream itself are not click-tested; see `design/QA_CHECKLIST.md`.
 
 ## Structure
 
 - `IrisCoreFFI.xcframework/` — checked-in binary artifact: the release `iris-core` dylib (relocatable, ad-hoc signed) plus its UniFFI-generated C header, wrapped as a `.binaryTarget` in `Package.swift`. Replaces the old dev-loop hack of linking directly against a freshly-`cargo build`-ed debug dylib by absolute path.
 - `Sources/IrisCore/` — the generated Swift bindings (`FfiEngine`, `FfiNode`, `FfiRecurrence`, etc.) — the actual Swift-friendly API.
 - `Sources/IrisMarkdown/` — pure-Foundation Markdown block parser (Apple's `AttributedString(markdown:)` regrouped into blocks, plus `- [ ]` checklists, `[[wikilinks]]` and `==highlight==`); its own target so it's unit-testable. Tests in `Tests/IrisMarkdownTests/`.
+- `Sources/IrisVaultWatch/` — testable path filtering, burst coalescing, file fingerprints and self-echo matching. `Sources/Iris/VaultWatcher.swift` adapts those rules to macOS FSEvents, rebuilds the derived cache off the UI thread and publishes through `VaultSession.change`.
 - `Sources/Iris/` — the real app: `IrisApp.swift` (entry point + `VaultSession`, the shared engine holder for secondary windows), `AppShell.swift` (sidebar + content routing), `RightRail.swift` (Connections/Dev Mode panel), `NodeWindowView.swift` (a node in its own window, ADR-038), `QuickCapturePanel.swift` (the global ⌘⇧C floating capture panel, Carbon hotkey — works while Iris is unfocused), `Theme.swift` (mirrors `design/tokens.md` exactly — colors/spacing/type as Swift values), `Screens/` (one file per screen from `design/navigation.md`; per-screen build status lives there).
 
 **Verification status:** this shell builds clean and launches, but several recent flows (editor autosave, global Quick Capture hotkey, Reading List/Trading Journal add/edit/status, multi-window) have not been click-tested — see `design/QA_CHECKLIST.md` for the steps.

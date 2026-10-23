@@ -60,6 +60,7 @@ struct OnboardingView: View {
     @State private var selected: OnboardingPath?
     @State private var errorMessage: String?
     @State private var readyEngine: FfiEngine?
+    @State private var readyVaultPath: String?
     @State private var restoreURL: String = ""
     @AppStorage("iris.launchView") private var launchView = "Today"
 
@@ -67,7 +68,19 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             if let engine = readyEngine {
                 AppShell(engine: engine, initialLens: initialLens)
-                    .onAppear { session.engine = engine }
+                    .onAppear {
+                        if let readyVaultPath { session.openVault(engine: engine, path: readyVaultPath) }
+                    }
+                    .safeAreaInset(edge: .top) {
+                        if let message = session.watchError {
+                            Text(message)
+                                .font(Typography.bodySmall())
+                                .foregroundStyle(c.danger)
+                                .padding(Space.sm)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(c.dangerTint)
+                        }
+                    }
             } else {
                 content
             }
@@ -239,6 +252,7 @@ struct OnboardingView: View {
         guard let path = pickFolder(title: "Choose a location for the new vault", createDirectories: true) else { return }
         do {
             readyEngine = try FfiEngine.`init`(path: path)
+            readyVaultPath = path
         } catch {
             errorMessage = String(describing: error)
         }
@@ -248,6 +262,7 @@ struct OnboardingView: View {
         guard let path = pickFolder(title: "Choose an existing vault", createDirectories: false) else { return }
         do {
             readyEngine = try FfiEngine.open(path: path)
+            readyVaultPath = path
         } catch {
             errorMessage = String(describing: error)
         }
@@ -264,6 +279,7 @@ struct OnboardingView: View {
                 _ = try engine.importMarkdownFolder(source: source)
             }
             readyEngine = engine
+            readyVaultPath = dest
         } catch {
             errorMessage = String(describing: error)
         }
@@ -274,6 +290,7 @@ struct OnboardingView: View {
         do {
             let result = try IrisCore.restoreFromBackup(remoteUrl: restoreURL, destPath: dest)
             readyEngine = result.engine
+            readyVaultPath = dest
         } catch {
             errorMessage = String(describing: error)
         }

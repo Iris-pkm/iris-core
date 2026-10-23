@@ -1,5 +1,6 @@
 import SwiftUI
 import IrisCore
+import IrisVaultWatch
 import IrisMarkdown
 
 /// The shared detail view every node type opens into (`design/navigation.md`
@@ -39,6 +40,7 @@ struct NodeEditorView: View {
     /// bytes don't shift.
     @State private var draft = ""
     @State private var savedDraft = ""
+    @State private var savedFingerprint: FileFingerprint?
     @State private var prefix = "\n"
     @State private var suffix = "\n"
     @State private var saveError: String?
@@ -142,7 +144,7 @@ struct NodeEditorView: View {
                     }
                 if changedElsewhere {
                     HStack(spacing: Space.md) {
-                        Text("This note was changed in another window.")
+                        Text("This note was changed elsewhere.")
                             .font(Typography.bodySmall()).foregroundStyle(c.warning)
                         Spacer()
                         Button("Reload") { load(); changedElsewhere = false }
@@ -169,7 +171,11 @@ struct NodeEditorView: View {
         .id(relPath) // fresh load whenever a different node opens
         .task(id: relPath) { load() }
         .onReceive(session.$change) { change in
-            guard let change, change.path == relPath, change.origin != editorID else { return }
+            guard let change,
+                  (change.path == relPath || change.path == VaultWatchRules.allPaths),
+                  change.origin != editorID else { return }
+            let current = session.fingerprint(for: relPath)
+            if let current, let savedFingerprint, current.hasSameContent(as: savedFingerprint) { return }
             if draft == savedDraft {
                 load()   // nothing unsaved here: take the other window's version
                 changedElsewhere = false
@@ -260,14 +266,17 @@ struct NodeEditorView: View {
     /// Re-read the node fresh (so a body/metadata change made elsewhere isn't
     /// overwritten), apply the tag edit, and save it as one undoable update.
     private func editTags(_ change: (inout [String]) -> Void) {
+        session.beginOwnWrite(path: relPath)
         do {
             var node = try engine.readNode(relPath: relPath).node
             change(&node.tags)
             try engine.updateNode(relPath: relPath, node: node)
             parsed?.node.tags = node.tags
             saveError = nil
+            savedFingerprint = session.fingerprint(for: relPath)
             session.noteChanged(path: relPath, from: editorID)
         } catch {
+            session.endOwnWrite(path: relPath)
             saveError = String(describing: error)
         }
     }
@@ -304,14 +313,17 @@ struct NodeEditorView: View {
     /// made elsewhere isn't overwritten). No-op when nothing changed.
     private func save() {
         guard parsed != nil, draft != savedDraft else { return }
+        session.beginOwnWrite(path: relPath)
         do {
             let current = try engine.readNode(relPath: relPath)
             try engine.updateNodeWithBody(relPath: relPath, node: current.node, body: prefix + draft + suffix)
             savedDraft = draft
             saveError = nil
             changedElsewhere = false
+            savedFingerprint = session.fingerprint(for: relPath)
             session.noteChanged(path: relPath, from: editorID)
         } catch {
+            session.endOwnWrite(path: relPath)
             saveError = String(describing: error)
         }
     }
@@ -324,6 +336,7 @@ struct NodeEditorView: View {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             draft = trimmed
             savedDraft = trimmed
+            savedFingerprint = session.fingerprint(for: relPath)
             if trimmed.isEmpty {
                 prefix = "\n"; suffix = "\n"
             } else {
@@ -335,6 +348,7 @@ struct NodeEditorView: View {
             loadError = nil
         } catch {
             parsed = nil
+            savedFingerprint = nil
             loadError = String(describing: error)
         }
     }

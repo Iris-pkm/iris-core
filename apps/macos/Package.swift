@@ -33,15 +33,24 @@ let package = Package(
             name: "IrisMarkdown",
             path: "Sources/IrisMarkdown"
         ),
+        .target(
+            name: "IrisVaultWatch",
+            path: "Sources/IrisVaultWatch"
+        ),
         .executableTarget(
             name: "Iris",
-            dependencies: ["IrisCore", "IrisMarkdown"],
+            dependencies: ["IrisCore", "IrisMarkdown", "IrisVaultWatch"],
             path: "Sources/Iris"
         ),
         .testTarget(
             name: "IrisMarkdownTests",
             dependencies: ["IrisMarkdown"],
             path: "Tests/IrisMarkdownTests"
+        ),
+        .testTarget(
+            name: "IrisVaultWatchTests",
+            dependencies: ["IrisVaultWatch", "IrisCore"],
+            path: "Tests/IrisVaultWatchTests"
         ),
     ]
 )
