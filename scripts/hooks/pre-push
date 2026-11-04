@@ -35,9 +35,9 @@ while read -r _ local_sha _ remote_sha; do
   case "$repo" in
     .git)
       echo "$files" | grep -Eq '^(iris-core|iris-cli|apps)/|^Cargo\.(toml|lock)$|^\.github/' || continue
-      if ! touched_since priv docs/PROGRESS.md; then
-        echo "pre-push: code changed but docs/PROGRESS.md has no planning-repo commit since these commits."
-        dirty priv docs/PROGRESS.md && echo "  (PROGRESS.md has uncommitted edits — commit them in .git-private.)"
+      if ! touched_since priv docs/current/PROGRESS.md; then
+        echo "pre-push: code changed but docs/current/PROGRESS.md has no planning-repo commit since these commits."
+        dirty priv docs/current/PROGRESS.md && echo "  (PROGRESS.md has uncommitted edits — commit them in .git-private.)"
         fail=1
       fi
       if echo "$files" | grep -Eq '^apps/[^/]+/Sources/Iris/'; then
@@ -49,13 +49,13 @@ while read -r _ local_sha _ remote_sha; do
       fi ;;
     .git-private)
       echo "$files" | grep -Eq '^(docs/|AGENTS\.md)' || continue
-      echo "$files" | grep -q '^docs/PROGRESS\.md$' || {
-        echo "pre-push: docs/AGENTS.md changed but docs/PROGRESS.md was not part of this push (docs-only changes still get an entry)."
+      echo "$files" | grep -q '^docs/current/PROGRESS\.md$' || {
+        echo "pre-push: planning docs or AGENTS.md changed but docs/current/PROGRESS.md was not part of this push (docs-only changes still get an entry)."
         fail=1; } ;;
     .git-design)
       echo "$files" | grep -Eq '\.md$' || continue
-      if ! touched_since priv docs/PROGRESS.md; then
-        echo "pre-push: design docs changed but docs/PROGRESS.md has no planning-repo commit since these commits."
+      if ! touched_since priv docs/current/PROGRESS.md; then
+        echo "pre-push: design docs changed but docs/current/PROGRESS.md has no planning-repo commit since these commits."
         fail=1
       fi ;;
   esac

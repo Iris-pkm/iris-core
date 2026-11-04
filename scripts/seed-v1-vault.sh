@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Seeds a throwaway vault for the V1 click-through (docs/TASKS.md): 2 projects,
+# Seeds a throwaway vault for the V1 click-through (docs/current/TASKS.md): 2 projects,
 # 4 tasks linked via parent_project, an area, a resource, and a computed.yaml
 # with a rollup count, a rollup percent and a deliberate divide-by-zero.
 # Usage: scripts/seed-v1-vault.sh [dir]   (default /tmp/iris-v1-vault; wiped first)

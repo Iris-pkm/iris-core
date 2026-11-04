@@ -12,7 +12,7 @@ A local-first, git-backed ideation station — a single place to accumulate, str
 
 ## Contributing (humans and AI agents)
 
-Read `AGENTS.md` first (in the private planning repo; see `docs/WINDOWS_SETUP.md` for the three-repo layout). After cloning, run `bash scripts/install-hooks.sh` once to enable the pre-push check that requires docs to ship with code.
+Read `AGENTS.md` first (in the private planning repo; see `docs/development/SETUP.md` for the three-repo layout). After cloning, run `bash scripts/install-hooks.sh` once to enable the pre-push check that requires docs to ship with code.
 
 ## Building the core + CLI
 
