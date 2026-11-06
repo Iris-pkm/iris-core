@@ -158,7 +158,7 @@ struct QuickCaptureView: View {
 
         let id = newNodeId()
         let now = ISO8601DateFormatter().string(from: Date())
-        let today = Self.dayFormatter.string(from: Date())
+        let today = LocalDay.today()
         let node = FfiNode(
             id: id, nodeType: .task, created: now, modified: now,
             schemaVersion: currentSchemaVersion(), lifecycle: nil, archivedAt: nil,
@@ -181,14 +181,6 @@ struct QuickCaptureView: View {
             errorMessage = String(describing: error)
         }
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .iso8601)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
 
 struct CaptureItem: Identifiable {

@@ -107,9 +107,7 @@ struct TodayView: View {
     }
 
     private func isoToday() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        LocalDay.today()
     }
 
     private func toggle(_ item: CachedNode) {

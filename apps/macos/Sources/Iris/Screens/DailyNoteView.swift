@@ -33,7 +33,7 @@ struct DailyNoteView: View {
                 Text("A derived feed of every node created today, not a second write into the Daily Note.").font(Typography.bodySans()).foregroundStyle(c.textSecondary).lineSpacing(4)
                 Spacer()
             }.padding(Space.lg).frame(width: 260).background(c.bgSurface)
-        }.background(c.bgCanvas).task { captures = (try? engine.dailyCaptures(day: Self.dayFormatter.string(from: Date()))) ?? [] }
+        }.background(c.bgCanvas).task { captures = (try? engine.dailyCaptures(day: LocalDay.today())) ?? [] }
     }
     private func row(_ node: CachedNode) -> some View {
         HStack(alignment: .top, spacing: Space.md) {
@@ -44,7 +44,6 @@ struct DailyNoteView: View {
         }.padding(.vertical, Space.sm)
     }
     private func time(_ raw: String) -> String { ISO8601DateFormatter().date(from: raw).map { Self.timeFormatter.string(from: $0) } ?? "" }
-    private static let dayFormatter: DateFormatter = { let f = DateFormatter(); f.calendar = Calendar(identifier: .iso8601); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f }()
     private static let titleFormatter: DateFormatter = { let f = DateFormatter(); f.dateStyle = .full; return f }()
     private static let timeFormatter: DateFormatter = { let f = DateFormatter(); f.dateFormat = "h:mma"; return f }()
 }

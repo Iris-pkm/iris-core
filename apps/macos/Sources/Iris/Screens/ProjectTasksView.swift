@@ -248,26 +248,19 @@ struct ProjectTasksView: View {
     }
 
     private func dueThisWeek() -> [CachedNode] {
-        let formatter = isoFormatter()
         let today = Date()
         guard let weekOut = Calendar.current.date(byAdding: .day, value: 7, to: today) else { return [] }
         return allTasks.filter { task in
-            guard let iso = task.dueDate ?? task.scheduledDate, let date = formatter.date(from: iso) else { return false }
+            guard let iso = task.dueDate ?? task.scheduledDate, let date = LocalDay.date(from: iso) else { return false }
             return date >= Calendar.current.startOfDay(for: today) && date <= weekOut
         }
     }
 
     private func shortDate(_ iso: String) -> String {
-        guard let date = isoFormatter().date(from: iso) else { return iso }
+        guard let date = LocalDay.date(from: iso) else { return iso }
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
         return formatter.string(from: date)
-    }
-
-    private func isoFormatter() -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
     }
 
     private func load() {

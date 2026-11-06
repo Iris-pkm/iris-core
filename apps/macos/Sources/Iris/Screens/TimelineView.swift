@@ -275,17 +275,14 @@ struct TimelineView: View {
     private func load() {
         let projects = (try? engine.search(query: "", nodeType: "project", domain: nil, tag: nil)) ?? []
         let events = (try? engine.search(query: "", nodeType: "event", domain: nil, tag: nil)) ?? []
-        let isoFormatter: () -> DateFormatter = {
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f
-        }
         let rfc3339 = ISO8601DateFormatter()
 
         var built: [Row] = []
         for project in projects {
             guard let full = try? engine.readNode(relPath: project.path).node,
                   let startStr = full.startDate, let endStr = full.targetDate,
-                  let start = isoFormatter().date(from: startStr),
-                  let end = isoFormatter().date(from: endStr) else { continue }
+                  let start = LocalDay.date(from: startStr),
+                  let end = LocalDay.date(from: endStr) else { continue }
 
             let milestones = events
                 .filter { $0.parentProject == project.id }

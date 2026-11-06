@@ -468,7 +468,7 @@ struct PARAWorkbenchView: View {
     /// `computed.yaml` fails every call identically, so stop at the first
     /// error and show it once instead of breaking the screen.
     private func loadComputed() {
-        let today = Self.dayFormatter.string(from: Date())
+        let today = LocalDay.today()
         var names = Set<String>()
         var failure: String?
         for i in rows.indices {
@@ -485,12 +485,4 @@ struct PARAWorkbenchView: View {
         computedNames = names.sorted()
         computedError = failure
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .iso8601)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
 }

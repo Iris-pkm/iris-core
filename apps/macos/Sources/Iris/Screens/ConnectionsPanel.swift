@@ -117,7 +117,7 @@ struct ConnectionsPanel: View {
             return
         }
         connections = (try? engine.connections(nodeId: parsed.node.id)) ?? []
-        let today = Self.dayFormatter.string(from: Date())
+        let today = LocalDay.today()
         do {
             computed = try engine.computedValues(relPath: relPath, today: today)
             computedError = nil
@@ -126,14 +126,6 @@ struct ConnectionsPanel: View {
             computedError = "\(error)"
         }
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .iso8601)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
 
 struct ComputedValuesSection: View {

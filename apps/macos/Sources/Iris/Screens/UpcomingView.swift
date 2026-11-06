@@ -111,7 +111,7 @@ struct UpcomingView: View {
     }
 
     private func dayLabel(_ iso: String?) -> String {
-        guard let iso, let date = isoFormatter().date(from: iso) else { return "No date" }
+        guard let iso, let date = LocalDay.date(from: iso) else { return "No date" }
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return "Today" }
         if calendar.isDateInTomorrow(date) { return "Tomorrow" }
@@ -120,15 +120,8 @@ struct UpcomingView: View {
         return formatter.string(from: date)
     }
 
-    private func isoFormatter() -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }
-
     private func load() {
-        let formatter = isoFormatter()
-        let from = formatter.string(from: Date())
+        let from = LocalDay.today()
         items = (try? engine.upcoming(from: from, days: UInt32(window.rawValue))) ?? []
         projectTitles = projectTitleMap(engine: engine)
     }

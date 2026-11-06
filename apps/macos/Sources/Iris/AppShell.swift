@@ -512,9 +512,7 @@ private struct Sidebar: View {
         resources = (try? engine.search(query: "", nodeType: "resource", domain: nil, tag: nil)) ?? []
         trashCount = (try? engine.trash())?.count ?? 0
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let today = formatter.string(from: Date())
+        let today = LocalDay.today()
         lensCounts = [
             .inbox: (try? engine.inbox())?.count ?? 0,
             .today: (try? engine.today(today: today))?.count ?? 0,

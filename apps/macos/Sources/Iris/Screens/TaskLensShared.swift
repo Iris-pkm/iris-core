@@ -88,9 +88,7 @@ func fileToProject(engine: FfiEngine, relPath: String, projectId: String) {
 func scheduleTask(engine: FfiEngine, relPath: String, date: Date) {
     guard let parsed = try? engine.readNode(relPath: relPath) else { return }
     var node = parsed.node
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-    node.scheduledDate = formatter.string(from: date)
+    node.scheduledDate = LocalDay.string(from: date)
     _ = try? engine.updateNode(relPath: relPath, node: node)
 }
 

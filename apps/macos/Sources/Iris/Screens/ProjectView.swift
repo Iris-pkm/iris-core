@@ -352,7 +352,7 @@ struct ProjectView: View {
             return
         }
         parsed = result
-        let today = Self.dayFormatter.string(from: Date())
+        let today = LocalDay.today()
         do {
             computed = try engine.computedValues(relPath: relPath, today: today)
             computedError = nil
@@ -374,12 +374,4 @@ struct ProjectView: View {
             blockerNames = [:]
         }
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .iso8601)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
