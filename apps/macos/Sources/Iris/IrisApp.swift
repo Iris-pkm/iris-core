@@ -104,6 +104,13 @@ struct IrisApp: App {
     @AppStorage("iris.appearance") private var appearance = "System"
     @StateObject private var session = VaultSession()
 
+    init() {
+        // `swift run` launches a bare executable (no .app bundle), which macOS
+        // treats as a background process: no Dock icon, no window focus.
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
     var body: some Scene {
         WindowGroup {
             OnboardingView()
