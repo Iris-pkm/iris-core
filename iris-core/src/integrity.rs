@@ -281,6 +281,38 @@ relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
     }
 
     #[test]
+    fn trashed_sources_still_report_their_path() {
+        let dir = TempDir::new("trashed-paths");
+        let vault = Vault::create(dir.path()).unwrap();
+        let trashed_task = TASK_WITH_DANGLING_RELATION.replace(
+            "schema_version: 1\n",
+            "schema_version: 1\ndeleted_at: 2026-01-16T00:00:00Z\n",
+        );
+        vault.write_node("tasks/gone.md", &trashed_task).unwrap();
+        vault.write_node("notes/a.md", NOTE).unwrap();
+        vault
+            .write_node(
+                "notes/comment.md",
+                "---\n\
+id: 01JQZ8ANNOTID00000000000AB\n\
+type: annotation\n\
+created: 2026-01-15T09:30:00Z\n\
+modified: 2026-01-15T09:30:00Z\n\
+schema_version: 1\n\
+deleted_at: 2026-01-16T00:00:00Z\n\
+resolved: false\n\
+anchor:\n  text_fragment: \"text that was deleted\"\n\
+relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
+---\n\nComment body.\n",
+            )
+            .unwrap();
+
+        let report = check(&vault).unwrap();
+        assert_eq!(report.dangling_relations[0].source_path, "tasks/gone.md");
+        assert_eq!(report.orphaned_annotations[0].path, "notes/comment.md");
+    }
+
+    #[test]
     fn annotation_with_unmatched_fragment_is_orphaned() {
         let dir = TempDir::new("annotation-orphaned");
         let vault = Vault::create(dir.path()).unwrap();
