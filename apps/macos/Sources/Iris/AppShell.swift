@@ -12,7 +12,7 @@ import IrisCore
 /// structurally impossible, matching how `selectedLens`/`workbenchCategory`
 /// already work.
 fileprivate enum AuxScreen {
-    case trash, history, spaces, dailyNote, readingList, musicIdeas, calendar, plugins
+    case trash, history, spaces, dailyNote, readingList, musicIdeas, calendar, plugins, needsAttention
 }
 
 /// The persistent three-pane shell (`design/navigation.md` §1): sidebar +
@@ -169,6 +169,7 @@ struct AppShell: View {
         case .trash: TrashView(engine: engine)
         case .calendar: CalendarView(engine: engine)
         case .plugins: PluginsView(engine: engine)
+        case .needsAttention: NeedsAttentionView(engine: engine)
         }
     }
 
@@ -261,6 +262,9 @@ private struct Sidebar: View {
     @State private var resources: [CachedNode] = []
     @State private var lensCounts: [TaskLens: Int] = [:]
     @State private var trashCount = 0
+    /// Integrity problems (T17). Walks every file, so it's computed off the
+    /// main thread, separately from the cheap counts in `reload()`.
+    @State private var attentionCount = 0
 
     // The standing-row count here has grown all session (Timeline, Plugins,
     // both added on top of an already-long list) — past a certain window
@@ -300,6 +304,7 @@ private struct Sidebar: View {
                         section(title: "Resources", category: .resources, dotColor: c.accentDefault, nodes: resources)
                     }
 
+                    if attentionCount > 0 { needsAttentionRow }
                     trashRow
                     historyRow
                     spacesRow
@@ -313,6 +318,7 @@ private struct Sidebar: View {
         .frame(width: 236)
         .background(c.bgSurface)
         .task { reload() }
+        .task { await refreshAttention() }
     }
 
     private func lensRow(_ lens: TaskLens) -> some View {
@@ -402,6 +408,7 @@ private struct Sidebar: View {
     private var readingListRow: some View { auxScreenRow(.readingList, icon: "books.vertical", title: "Reading List") }
     private var musicIdeasRow: some View { auxScreenRow(.musicIdeas, icon: "music.note", title: "Music Ideas") }
     private var calendarRow: some View { auxScreenRow(.calendar, icon: "calendar.badge.clock", title: "Calendar") }
+    private var needsAttentionRow: some View { auxScreenRow(.needsAttention, icon: "exclamationmark.triangle", title: "Needs Attention", trailingCount: attentionCount) }
     private var trashRow: some View { auxScreenRow(.trash, icon: "trash", title: "Trash", trailingCount: trashCount) }
     private var historyRow: some View { auxScreenRow(.history, icon: "clock", title: "History") }
     private var spacesRow: some View { auxScreenRow(.spaces, icon: "square.3.layers.3d", title: "Spaces") }
@@ -504,6 +511,14 @@ private struct Sidebar: View {
         }
         .buttonStyle(.plain)
         .disabled(openNode == nil)
+    }
+
+    private func refreshAttention() async {
+        let engine = engine
+        attentionCount = await Task.detached {
+            guard let r = try? engine.checkIntegrity() else { return 0 }
+            return r.malformedFiles.count + r.danglingRelations.count + r.orphanedAnnotations.count
+        }.value
     }
 
     private func reload() {
