@@ -9,9 +9,8 @@ import IrisCore
 /// repairs or deletes anything here (ADR-002/019: the vault always wins) — the
 /// only actions are "reveal the file" and "rescan" once the user has fixed it.
 ///
-/// Known limits: dangling relations and orphaned annotations are reported by
-/// node id only (the core report carries no path), and malformed files offer
-/// no "Open in Dev Mode" because Dev Mode needs a parsed node.
+/// Known limit: malformed files offer no "Open in Dev Mode" because Dev Mode
+/// needs a parsed node.
 struct NeedsAttentionView: View {
     let engine: FfiEngine
 
@@ -42,14 +41,19 @@ struct NeedsAttentionView: View {
                     ForEach(report.danglingRelations, id: \.self) { relation in
                         row(
                             title: "\(relation.relType) → \(relation.targetId)",
-                            detail: "From node \(relation.sourceId). The target id isn't in the vault."
+                            detail: "From \(relation.sourcePath). The target id isn't in the vault.",
+                            revealPath: relation.sourcePath
                         )
                     }
                 }
                 if !report.orphanedAnnotations.isEmpty {
                     sectionTitle("Orphaned annotations", count: report.orphanedAnnotations.count)
                     ForEach(report.orphanedAnnotations, id: \.self) { annotation in
-                        row(title: "Annotation \(annotation.annotationId)", detail: annotation.reason)
+                        row(
+                            title: "Annotation \(annotation.annotationId)",
+                            detail: "\(annotation.path) — \(annotation.reason)",
+                            revealPath: annotation.path
+                        )
                     }
                 }
                 if let errorMessage {
@@ -105,20 +109,24 @@ struct NeedsAttentionView: View {
                 Text(file.error).font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
             }
             Spacer()
-            Button("Reveal in Finder") { reveal(file.path) }
-                .buttonStyle(.plain)
-                .font(Typography.bodySans())
-                .foregroundStyle(c.accentDefault)
-                .padding(.vertical, Space.xs)
-                .contentShape(Rectangle())
-                .accessibilityLabel("Reveal \(file.path) in Finder")
+            revealButton(file.path)
         }
         .padding(.vertical, Space.md)
         .overlay(alignment: .bottom) { Divider().background(c.borderDefault) }
         .accessibilityElement(children: .contain)
     }
 
-    private func row(title: String, detail: String) -> some View {
+    private func revealButton(_ relPath: String) -> some View {
+        Button("Reveal in Finder") { reveal(relPath) }
+            .buttonStyle(.plain)
+            .font(Typography.bodySans())
+            .foregroundStyle(c.accentDefault)
+            .padding(.vertical, Space.xs)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Reveal \(relPath) in Finder")
+    }
+
+    private func row(title: String, detail: String, revealPath: String) -> some View {
         HStack(spacing: Space.md) {
             Circle().fill(c.warning).frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: Space.xxs) {
@@ -126,10 +134,11 @@ struct NeedsAttentionView: View {
                 Text(detail).font(Typography.bodySmall()).foregroundStyle(c.textSecondary)
             }
             Spacer()
+            revealButton(revealPath)
         }
         .padding(.vertical, Space.md)
         .overlay(alignment: .bottom) { Divider().background(c.borderDefault) }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     private var emptyState: some View {

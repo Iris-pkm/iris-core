@@ -1676,13 +1676,21 @@ public func FfiConverterTypeConnection_lower(_ value: Connection) -> RustBuffer 
  */
 public struct DanglingRelation: Equatable, Hashable {
     public var sourceId: String
+    /**
+     * Vault-relative path of the file holding the relation.
+     */
+    public var sourcePath: String
     public var relType: String
     public var targetId: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(sourceId: String, relType: String, targetId: String) {
+    public init(sourceId: String, 
+        /**
+         * Vault-relative path of the file holding the relation.
+         */sourcePath: String, relType: String, targetId: String) {
         self.sourceId = sourceId
+        self.sourcePath = sourcePath
         self.relType = relType
         self.targetId = targetId
     }
@@ -1704,6 +1712,7 @@ public struct FfiConverterTypeDanglingRelation: FfiConverterRustBuffer {
         return
             try DanglingRelation(
                 sourceId: FfiConverterString.read(from: &buf), 
+                sourcePath: FfiConverterString.read(from: &buf), 
                 relType: FfiConverterString.read(from: &buf), 
                 targetId: FfiConverterString.read(from: &buf)
         )
@@ -1711,6 +1720,7 @@ public struct FfiConverterTypeDanglingRelation: FfiConverterRustBuffer {
 
     public static func write(_ value: DanglingRelation, into buf: inout [UInt8]) {
         FfiConverterString.write(value.sourceId, into: &buf)
+        FfiConverterString.write(value.sourcePath, into: &buf)
         FfiConverterString.write(value.relType, into: &buf)
         FfiConverterString.write(value.targetId, into: &buf)
     }
@@ -2585,12 +2595,20 @@ public func FfiConverterTypeMalformedFile_lower(_ value: MalformedFile) -> RustB
  */
 public struct OrphanedAnnotation: Equatable, Hashable {
     public var annotationId: String
+    /**
+     * Vault-relative path of the annotation file.
+     */
+    public var path: String
     public var reason: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(annotationId: String, reason: String) {
+    public init(annotationId: String, 
+        /**
+         * Vault-relative path of the annotation file.
+         */path: String, reason: String) {
         self.annotationId = annotationId
+        self.path = path
         self.reason = reason
     }
 
@@ -2611,12 +2629,14 @@ public struct FfiConverterTypeOrphanedAnnotation: FfiConverterRustBuffer {
         return
             try OrphanedAnnotation(
                 annotationId: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
                 reason: FfiConverterString.read(from: &buf)
         )
     }
 
     public static func write(_ value: OrphanedAnnotation, into buf: inout [UInt8]) {
         FfiConverterString.write(value.annotationId, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
         FfiConverterString.write(value.reason, into: &buf)
     }
 }

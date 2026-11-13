@@ -21,6 +21,8 @@ pub struct MalformedFile {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DanglingRelation {
     pub source_id: String,
+    /// Vault-relative path of the file holding the relation.
+    pub source_path: String,
     pub rel_type: String,
     pub target_id: String,
 }
@@ -34,6 +36,8 @@ pub struct DanglingRelation {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OrphanedAnnotation {
     pub annotation_id: String,
+    /// Vault-relative path of the annotation file.
+    pub path: String,
     pub reason: String,
 }
 
@@ -60,6 +64,7 @@ impl IntegrityReport {
 pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
     let mut report = IntegrityReport::default();
     let mut parsed = Vec::new();
+    let mut paths = HashMap::<String, String>::new();
     let mut seen_ids = HashMap::<String, String>::new();
 
     for path in vault.scan()? {
@@ -76,6 +81,7 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
                         error: format!("duplicate id {} (first in {first})", node.node.id),
                     });
                 } else {
+                    paths.insert(node.node.id.clone(), rel_path.clone());
                     seen_ids.insert(node.node.id.clone(), rel_path);
                     parsed.push(node);
                 }
@@ -94,6 +100,7 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
             if !known_ids.contains(rel.target.as_str()) {
                 report.dangling_relations.push(DanglingRelation {
                     source_id: parsed_node.node.id.clone(),
+                    source_path: paths[&parsed_node.node.id].clone(),
                     rel_type: rel.rel_type.clone(),
                     target_id: rel.target.clone(),
                 });
@@ -114,6 +121,7 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
         let Some(annotates) = annotates else {
             report.orphaned_annotations.push(OrphanedAnnotation {
                 annotation_id: parsed_node.node.id.clone(),
+                path: paths[&parsed_node.node.id].clone(),
                 reason: "no `annotates` relation".to_string(),
             });
             continue;
@@ -122,6 +130,7 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
         let Some(target) = parsed.iter().find(|p| p.node.id == annotates.target) else {
             report.orphaned_annotations.push(OrphanedAnnotation {
                 annotation_id: parsed_node.node.id.clone(),
+                path: paths[&parsed_node.node.id].clone(),
                 reason: format!("annotates target `{}` does not exist", annotates.target),
             });
             continue;
@@ -138,6 +147,7 @@ pub fn check(vault: &Vault) -> IrisResult<IntegrityReport> {
             if !target.body.contains(fragment) {
                 report.orphaned_annotations.push(OrphanedAnnotation {
                     annotation_id: parsed_node.node.id.clone(),
+                    path: paths[&parsed_node.node.id].clone(),
                     reason: "anchor text fragment not found in target body".to_string(),
                 });
             }
@@ -238,6 +248,7 @@ broken.
         let report = check(&vault).unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.dangling_relations.len(), 1);
+        assert_eq!(report.dangling_relations[0].source_path, "tasks/a.md");
         assert_eq!(
             report.dangling_relations[0].target_id,
             "01JQZ8DOESNOTEXIST0000000A"
@@ -297,6 +308,7 @@ relations:\n  - type: annotates\n    target: 01JQZ8XYABCDEF0123456789AB\n\
             report.orphaned_annotations[0].annotation_id,
             "01JQZ8ANNOTID00000000000AB"
         );
+        assert_eq!(report.orphaned_annotations[0].path, "notes/comment.md");
     }
 
     #[test]
