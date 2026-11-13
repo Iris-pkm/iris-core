@@ -64,7 +64,8 @@ struct NeedsAttentionView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(c.bgCanvas)
-        .task { rescan() }
+        .task { await rescan() }
+        .refreshOnVaultChange { Task { await rescan() } }
     }
 
     private var header: some View {
@@ -77,7 +78,7 @@ struct NeedsAttentionView: View {
                     .frame(maxWidth: 680, alignment: .leading)
             }
             Spacer()
-            Button("Rescan") { rescan() }
+            Button("Rescan") { Task { await rescan() } }
                 .buttonStyle(.plain)
                 .font(Typography.bodySans())
                 .foregroundStyle(c.accentDefault)
@@ -141,11 +142,15 @@ struct NeedsAttentionView: View {
         .padding(.vertical, Space.xxxl)
     }
 
-    private func rescan() {
-        do {
-            report = try engine.checkIntegrity()
+    /// Off the main thread: the check walks every file in the vault.
+    private func rescan() async {
+        let engine = engine
+        let result = await Task.detached { Result { try engine.checkIntegrity() } }.value
+        switch result {
+        case .success(let r):
+            report = r
             errorMessage = nil
-        } catch {
+        case .failure(let error):
             errorMessage = "Couldn't check the vault: \(error)"
         }
     }

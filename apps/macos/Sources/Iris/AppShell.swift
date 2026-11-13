@@ -265,6 +265,7 @@ private struct Sidebar: View {
     /// Integrity problems (T17). Walks every file, so it's computed off the
     /// main thread, separately from the cheap counts in `reload()`.
     @State private var attentionCount = 0
+    @State private var attentionTask: Task<Void, Never>?
 
     // The standing-row count here has grown all session (Timeline, Plugins,
     // both added on top of an already-long list) — past a certain window
@@ -319,6 +320,7 @@ private struct Sidebar: View {
         .background(c.bgSurface)
         .task { reload() }
         .task { await refreshAttention() }
+        .refreshOnVaultChange { attentionTask?.cancel(); attentionTask = Task { await refreshAttention() } }
     }
 
     private func lensRow(_ lens: TaskLens) -> some View {
@@ -515,10 +517,12 @@ private struct Sidebar: View {
 
     private func refreshAttention() async {
         let engine = engine
-        attentionCount = await Task.detached {
+        let count = await Task.detached {
             guard let r = try? engine.checkIntegrity() else { return 0 }
             return r.malformedFiles.count + r.danglingRelations.count + r.orphanedAnnotations.count
         }.value
+        // A newer vault change cancelled this run: drop its (stale) result.
+        if !Task.isCancelled { attentionCount = count }
     }
 
     private func reload() {
