@@ -9,3 +9,5 @@ target/
 .git-design/
 design/
 AGENTS.md
+.iris/cache.sqlite
+
