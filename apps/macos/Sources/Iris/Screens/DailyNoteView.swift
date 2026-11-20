@@ -39,7 +39,7 @@ struct DailyNoteView: View {
         HStack(alignment: .top, spacing: Space.md) {
             Text(time(node.created)).font(Typography.caption()).foregroundStyle(c.textDisabled).frame(width: 42, alignment: .leading)
             Image(systemName: node.nodeType == "task" ? "checkmark.square" : "doc").font(.system(size: 12)).foregroundStyle(c.accentDefault).frame(width: 14)
-            Text((node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")).font(Typography.serif(16)).foregroundStyle(c.textPrimary)
+            Text(node.title).font(Typography.serif(16)).foregroundStyle(c.textPrimary)
             Spacer()
         }.padding(.vertical, Space.sm)
     }

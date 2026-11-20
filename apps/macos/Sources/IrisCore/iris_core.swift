@@ -1386,6 +1386,7 @@ public func FfiConverterTypeActivationEnvironment_lower(_ value: ActivationEnvir
  * is for `iris-cli`'s `--json` output, not consumed inside `iris-core` itself.
  */
 public struct CachedNode: Equatable, Hashable {
+    public var title: String
     public var id: String
     public var nodeType: String
     public var path: String
@@ -1433,7 +1434,7 @@ public struct CachedNode: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, nodeType: String, path: String, 
+    public init(title: String, id: String, nodeType: String, path: String, 
         /**
          * RFC3339, always present (`Node::created` is required). Powers
          * recency ordering (e.g. guided activation's "recently-added material").
@@ -1460,6 +1461,7 @@ public struct CachedNode: Equatable, Hashable {
          * Comma-joined tags (SQLite has no array type). See `search.rs` for how
          * tag filtering matches against this.
          */tags: String, body: String, isTemplate: Bool) {
+        self.title = title
         self.id = id
         self.nodeType = nodeType
         self.path = path
@@ -1496,6 +1498,7 @@ public struct FfiConverterTypeCachedNode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CachedNode {
         return
             try CachedNode(
+                title: FfiConverterString.read(from: &buf), 
                 id: FfiConverterString.read(from: &buf), 
                 nodeType: FfiConverterString.read(from: &buf), 
                 path: FfiConverterString.read(from: &buf), 
@@ -1518,6 +1521,7 @@ public struct FfiConverterTypeCachedNode: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: CachedNode, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.title, into: &buf)
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.nodeType, into: &buf)
         FfiConverterString.write(value.path, into: &buf)
@@ -1964,6 +1968,7 @@ public func FfiConverterTypeFfiImportReport_lower(_ value: FfiImportReport) -> R
  * `FfiAnnotationAnchor`. Field order and names otherwise match `Node`.
  */
 public struct FfiNode: Equatable, Hashable {
+    public var title: String?
     public var id: String
     public var nodeType: NodeType
     public var created: String
@@ -2013,7 +2018,8 @@ public struct FfiNode: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, nodeType: NodeType, created: String, modified: String, schemaVersion: UInt32, lifecycle: Lifecycle?, archivedAt: String?, domain: String?, tags: [String], relations: [Relation], deletedAt: String?, isTemplate: Bool, distillationLevel: DistillationLevel?, status: String?, priority: Priority?, scheduledDate: String?, dueDate: String?, estimatedPomodoros: UInt32?, actualPomodoros: UInt32?, recurrence: FfiRecurrence?, recurrenceOccurrences: UInt32?, checklist: [ChecklistItem], start: String?, end: String?, externalId: String?, projectStatus: ProjectStatus?, startDate: String?, targetDate: String?, sourceUrl: String?, readStatus: String?, reminderText: String?, fireAt: String?, reminderStatus: String?, resolved: Bool, anchor: FfiAnnotationAnchor?, pinned: [String], activeFilter: String?, defaultView: String?, theme: String?, inkAttachment: String?, date: String?, symbol: String?, entry: Double?, exit: Double?, pnl: Double?, rMultiple: Double?) {
+    public init(title: String?, id: String, nodeType: NodeType, created: String, modified: String, schemaVersion: UInt32, lifecycle: Lifecycle?, archivedAt: String?, domain: String?, tags: [String], relations: [Relation], deletedAt: String?, isTemplate: Bool, distillationLevel: DistillationLevel?, status: String?, priority: Priority?, scheduledDate: String?, dueDate: String?, estimatedPomodoros: UInt32?, actualPomodoros: UInt32?, recurrence: FfiRecurrence?, recurrenceOccurrences: UInt32?, checklist: [ChecklistItem], start: String?, end: String?, externalId: String?, projectStatus: ProjectStatus?, startDate: String?, targetDate: String?, sourceUrl: String?, readStatus: String?, reminderText: String?, fireAt: String?, reminderStatus: String?, resolved: Bool, anchor: FfiAnnotationAnchor?, pinned: [String], activeFilter: String?, defaultView: String?, theme: String?, inkAttachment: String?, date: String?, symbol: String?, entry: Double?, exit: Double?, pnl: Double?, rMultiple: Double?) {
+        self.title = title
         self.id = id
         self.nodeType = nodeType
         self.created = created
@@ -2078,6 +2084,7 @@ public struct FfiConverterTypeFfiNode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiNode {
         return
             try FfiNode(
+                title: FfiConverterOptionString.read(from: &buf), 
                 id: FfiConverterString.read(from: &buf), 
                 nodeType: FfiConverterTypeNodeType.read(from: &buf), 
                 created: FfiConverterString.read(from: &buf), 
@@ -2128,6 +2135,7 @@ public struct FfiConverterTypeFfiNode: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: FfiNode, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.title, into: &buf)
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterTypeNodeType.write(value.nodeType, into: &buf)
         FfiConverterString.write(value.created, into: &buf)
@@ -4115,6 +4123,18 @@ fileprivate struct FfiConverterSequenceTypeRelation: FfiConverterRustBuffer {
     }
 }
 /**
+ * Resolve a display title for a freshly read node without a cache lookup.
+ */
+public func displayTitle(title: String?, body: String, path: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_iris_core_fn_func_display_title(
+        FfiConverterOptionString.lower(title),
+        FfiConverterString.lower(body),
+        FfiConverterString.lower(path),$0
+    )
+})
+}
+/**
  * The git half of restore-from-backup can't be a constructor (see
  * `FfiRestoreResult`'s doc comment), so it's exported as a plain function.
  */
@@ -4193,6 +4213,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_iris_core_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_iris_core_checksum_func_display_title() != 46767) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_iris_core_checksum_func_restore_from_backup() != 21377) {
         return InitializationResult.apiChecksumMismatch

@@ -79,6 +79,7 @@ struct ReadingListView: View {
         let id = newNodeId()
         let now = ISO8601DateFormatter().string(from: Date())
         let node = FfiNode(
+            title: nil,
             id: id, nodeType: .readingItem, created: now, modified: now, schemaVersion: currentSchemaVersion(),
             lifecycle: nil, archivedAt: nil, domain: nil, tags: [], relations: [], deletedAt: nil, isTemplate: false,
             distillationLevel: nil, status: nil, priority: nil, scheduledDate: nil, dueDate: nil, estimatedPomodoros: nil,
@@ -164,6 +165,6 @@ struct ReadingListView: View {
         }.padding(Space.lg).frame(width: 260).background(c.bgSurface)
     }
     private func status(_ value: String) -> some View { Text(value.capitalized).font(Typography.caption()).foregroundStyle(c.textSecondary).padding(.horizontal, Space.sm).padding(.vertical, Space.xxs).background(c.bgHover).clipShape(Capsule()) }
-    private func title(_ node: CachedNode) -> String { (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+    private func title(_ node: CachedNode) -> String { node.title }
     private func load() { let nodes = (try? engine.search(query: "", nodeType: "reading-item", domain: nil, tag: nil)) ?? []; items = nodes.compactMap { n in (try? engine.readNode(relPath: n.path)).map { (n, $0.node) } } }
 }

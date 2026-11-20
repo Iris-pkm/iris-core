@@ -98,7 +98,7 @@ struct SpacesView: View {
         } catch { errorMessage = String(describing: error) }
     }
 
-    private func title(_ node: CachedNode) -> String { (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+    private func title(_ node: CachedNode) -> String { node.title }
     private func summary(_ node: FfiNode?) -> String {
         let pinned = node?.pinned.count ?? 0
         let filter = node?.activeFilter ?? "no filter"

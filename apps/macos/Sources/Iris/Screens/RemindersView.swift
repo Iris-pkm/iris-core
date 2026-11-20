@@ -149,7 +149,7 @@ struct RemindersView: View {
         let nodes = (try? engine.search(query: "", nodeType: "reminder", domain: nil, tag: nil)) ?? []
         reminders = nodes.compactMap { cached in
             guard let parsed = try? engine.readNode(relPath: cached.path) else { return nil }
-            return Reminder(id: cached.id, path: cached.path, node: parsed.node)
+            return Reminder(id: cached.id, path: cached.path, node: parsed.node, displayName: cached.title)
         }.sorted { ($0.fireDate ?? .distantFuture) < ($1.fireDate ?? .distantFuture) }
         Task { for reminder in upcoming { await ReminderDelivery.schedule(id: reminder.id, title: reminder.title, fireDate: reminder.fireDate, isRecent: reminder.isRecent) } }
     }
@@ -161,6 +161,7 @@ struct RemindersView: View {
         let now = ISO8601DateFormatter().string(from: Date())
         let fireAt = ISO8601DateFormatter().string(from: draftDate)
         let node = FfiNode(
+            title: nil,
             id: id, nodeType: .reminder, created: now, modified: now, schemaVersion: currentSchemaVersion(),
             lifecycle: nil, archivedAt: nil, domain: nil, tags: [], relations: [], deletedAt: nil, isTemplate: false,
             distillationLevel: nil, status: nil, priority: nil, scheduledDate: nil, dueDate: nil, estimatedPomodoros: nil,
@@ -173,7 +174,7 @@ struct RemindersView: View {
         do {
             let path = "reminders/\(id.lowercased()).md"
             try engine.createNode(relPath: path, node: node, body: "\n\(text)\n")
-            let reminder = Reminder(id: id, path: path, node: node)
+            let reminder = Reminder(id: id, path: path, node: node, displayName: displayTitle(title: node.title, body: "", path: path))
             reminders.append(reminder)
             reminders.sort { ($0.fireDate ?? .distantFuture) < ($1.fireDate ?? .distantFuture) }
             Task { await ReminderDelivery.schedule(id: reminder.id, title: reminder.title, fireDate: reminder.fireDate, isRecent: reminder.isRecent) }
@@ -186,6 +187,7 @@ struct RemindersView: View {
         let id: String
         let path: String
         let node: FfiNode
+        let displayName: String
         var fireDate: Date? { node.fireAt.flatMap { ISO8601DateFormatter().date(from: $0) } }
         var isRecent: Bool { ["fired", "dismissed"].contains((node.reminderStatus ?? "").lowercased()) }
         /// Still scheduled (not fired/dismissed) with a real fire time at or
@@ -195,7 +197,7 @@ struct RemindersView: View {
         /// one of `upcoming`/`past`.
         var isUpcoming: Bool { fireDate.map { $0 >= Date() } ?? false }
         var isPast: Bool { !isRecent && !isUpcoming }
-        var title: String { node.reminderText ?? (path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+        var title: String { node.reminderText ?? displayName }
         var detail: String {
             guard let fireDate else { return "No delivery time recorded" }
             if isRecent { return "\(node.reminderStatus?.capitalized ?? "Handled") · \(fireDate.formatted(date: .abbreviated, time: .shortened))" }

@@ -201,6 +201,7 @@ impl TryFrom<FfiRecurrence> for Recurrence {
 // `f64`, which has no `Eq` impl.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct FfiNode {
+    pub title: Option<String>,
     pub id: crate::types::NodeId,
     pub node_type: crate::types::NodeType,
     pub created: String,
@@ -251,9 +252,16 @@ pub struct FfiNode {
     pub r_multiple: Option<f64>,
 }
 
+/// Resolve a display title for a freshly read node without a cache lookup.
+#[uniffi::export]
+pub fn display_title(title: Option<String>, body: String, path: String) -> String {
+    crate::title::resolve_title(title.as_deref(), &body, std::path::Path::new(&path))
+}
+
 impl From<&Node> for FfiNode {
     fn from(n: &Node) -> Self {
         FfiNode {
+            title: n.title.clone(),
             id: n.id.clone(),
             node_type: n.node_type.clone(),
             created: to_rfc3339(&n.created),
@@ -311,6 +319,7 @@ impl TryFrom<FfiNode> for Node {
 
     fn try_from(f: FfiNode) -> Result<Self, Self::Error> {
         Ok(Node {
+            title: f.title,
             id: f.id,
             node_type: f.node_type,
             created: from_rfc3339("created", &f.created)?,
@@ -1035,6 +1044,7 @@ mod tests {
 
     fn sample_node() -> Node {
         Node {
+            title: Some("Authored title".to_string()),
             id: new_node_id(),
             node_type: NodeType::Custom("trading-journal-entry".to_string()),
             created: Utc::now(),

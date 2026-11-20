@@ -229,7 +229,7 @@ struct AppShell: View {
     }
 
     private func nodeTitle(_ node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 }
 
@@ -468,11 +468,8 @@ private struct Sidebar: View {
         .buttonStyle(.plain)
     }
 
-    /// No dedicated `title` field exists in the schema yet (`search.rs`'s own
-    /// documented simplification) — the file's basename stands in, same
-    /// stand-in `search.rs` already uses.
     private func titleFor(_ node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 
     /// Timeline was pulled forward from Phase 3 alongside Graph — resolves

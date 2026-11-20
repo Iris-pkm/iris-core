@@ -201,7 +201,7 @@ struct DistillationQueueView: View {
     }
 
     private func titleFor(_ node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 
     private func nextLevel(after level: String) -> String {

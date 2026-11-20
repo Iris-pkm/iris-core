@@ -104,6 +104,7 @@ fn import_one(
     let (created, modified) = file_times(path);
 
     let node = Node {
+        title: None,
         id,
         node_type: NodeType::Note,
         created,

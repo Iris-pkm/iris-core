@@ -1,8 +1,7 @@
 //! Basic search — lexical (title/body) plus type/domain/tag filtering over the
 //! cache (PRD §7 "Basic search"). This is *not* the four-layer fusion search
 //! (lexical + semantic + structural + temporal, RRF-ranked) — that's Phase 4.
-//! No `title` field exists in the schema, so "title" search matches against
-//! the node's file path as a stand-in; flagged as a simplification.
+//! Matches the resolved display title, path, and body (ADR-042).
 
 use crate::cache::{Cache, CachedNode};
 use crate::error::IrisResult;
@@ -22,6 +21,7 @@ pub fn search(cache: &Cache, query: &str, filters: &SearchFilters) -> IrisResult
     cache.query_nodes(
         "SELECT * FROM nodes WHERE deleted_at IS NULL AND is_template = 0
            AND (?1 = '' OR path LIKE '%' || ?1 || '%' COLLATE NOCASE
+                         OR title LIKE '%' || ?1 || '%' COLLATE NOCASE
                          OR body LIKE '%' || ?1 || '%' COLLATE NOCASE)
            AND (?2 IS NULL OR node_type = ?2)
            AND (?3 IS NULL OR domain = ?3)

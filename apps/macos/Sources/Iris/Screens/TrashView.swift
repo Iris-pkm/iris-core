@@ -149,7 +149,7 @@ struct TrashView: View {
     }
 
     private func title(for node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 
     private func deletedDescription(for node: CachedNode) -> String {

@@ -214,6 +214,8 @@ pub struct Node {
 
     // -- optional shared --
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<Lifecycle>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
@@ -328,6 +330,7 @@ impl Node {
     pub fn new(node_type: NodeType) -> Self {
         let now = Utc::now();
         Node {
+            title: None,
             id: new_node_id(),
             node_type,
             created: now,

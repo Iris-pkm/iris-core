@@ -169,7 +169,7 @@ struct SearchPaletteView: View {
     }
 
     private func title(for node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 
     private func symbol(for type: String) -> String {

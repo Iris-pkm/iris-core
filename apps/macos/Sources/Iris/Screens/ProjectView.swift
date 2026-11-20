@@ -315,9 +315,9 @@ struct ProjectView: View {
     // MARK: - Helpers
 
     private func titleFor(_ node: FfiNode) -> String { titleFor(relPath: relPath) }
-    private func titleFor(_ node: CachedNode) -> String { titleFor(relPath: node.path) }
+    private func titleFor(_ node: CachedNode) -> String { node.title }
     private func titleFor(relPath: String) -> String {
-        (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        displayTitle(title: parsed?.node.title, body: parsed?.body ?? "", path: relPath)
     }
 
     private func priorityTag(_ priority: String?) -> (label: String, color: Color)? {

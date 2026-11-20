@@ -43,12 +43,12 @@ enum TaskLens: String, CaseIterable, Identifiable {
 }
 
 func taskTitleFor(_ node: CachedNode) -> String {
-    (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+    node.title
 }
 
 /// `parent_project` is an id on `CachedNode` — resolving it to a display
 /// name means fetching every project once and mapping id -> title, the
-/// same basename stand-in every other screen uses.
+/// resolved display title every other screen uses (ADR-042).
 func projectTitleMap(engine: FfiEngine) -> [String: String] {
     let projects = (try? engine.search(query: "", nodeType: "project", domain: nil, tag: nil)) ?? []
     var map: [String: String] = [:]

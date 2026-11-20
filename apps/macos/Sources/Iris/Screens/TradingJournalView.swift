@@ -108,6 +108,7 @@ struct TradingJournalView: View {
         let nowDate = Date()
         let now = ISO8601DateFormatter().string(from: nowDate)
         let node = FfiNode(
+            title: nil,
             id: id, nodeType: .tradingJournalEntry, created: now, modified: now, schemaVersion: currentSchemaVersion(),
             lifecycle: nil, archivedAt: nil, domain: "trading", tags: [], relations: [], deletedAt: nil, isTemplate: false,
             distillationLevel: nil, status: nil, priority: nil, scheduledDate: nil, dueDate: nil, estimatedPomodoros: nil,

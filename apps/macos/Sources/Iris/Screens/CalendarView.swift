@@ -110,7 +110,7 @@ struct CalendarView: View {
         }
         unscheduled = (try? engine.somedayMaybe()) ?? []
     }
-    private func title(for node: CachedNode) -> String { (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+    private func title(for node: CachedNode) -> String { node.title }
     private static func parse(_ value: String) -> Date? { ISO8601DateFormatter().date(from: value) }
     private static func weekStart(for date: Date) -> Date { Calendar.current.dateInterval(of: .weekOfYear, for: date)?.start ?? date }
 

@@ -13,12 +13,15 @@ use serde::Serialize;
 use crate::error::{IrisError, IrisResult};
 use crate::vault::Vault;
 
+const CACHE_SCHEMA_VERSION: u32 = 1;
+
 /// A derived cache row for one node — enough to prove the cache reflects the
 /// vault and to power basic task-view queries (ARCHITECTURE.md §12); richer
 /// queries (search, full relation lookups) build on this later. `Serialize`
 /// is for `iris-cli`'s `--json` output, not consumed inside `iris-core` itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, uniffi::Record)]
 pub struct CachedNode {
+    pub title: String,
     pub id: String,
     pub node_type: String,
     pub path: String,
@@ -55,13 +58,21 @@ pub struct CachedNode {
 
 pub struct Cache {
     conn: Connection,
+    pub(crate) needs_rebuild: bool,
 }
 
 impl Cache {
     /// Open (or create) a cache database file.
     pub fn open(path: impl AsRef<Path>) -> IrisResult<Self> {
         let conn = Connection::open(path).map_err(sqlite_err)?;
-        let cache = Cache { conn };
+        let needs_rebuild = conn
+            .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
+            .map_err(sqlite_err)?
+            != CACHE_SCHEMA_VERSION;
+        let cache = Cache {
+            conn,
+            needs_rebuild,
+        };
         cache.create_schema()?;
         Ok(cache)
     }
@@ -69,12 +80,20 @@ impl Cache {
     /// An in-memory cache, for tests.
     pub fn open_in_memory() -> IrisResult<Self> {
         let conn = Connection::open_in_memory().map_err(sqlite_err)?;
-        let cache = Cache { conn };
+        let cache = Cache {
+            conn,
+            needs_rebuild: true,
+        };
         cache.create_schema()?;
         Ok(cache)
     }
 
     fn create_schema(&self) -> IrisResult<()> {
+        if self.needs_rebuild {
+            self.conn
+                .execute_batch("BEGIN; DROP TABLE IF EXISTS relations; DROP TABLE IF EXISTS nodes;")
+                .map_err(sqlite_err)?;
+        }
         self.conn
             .execute_batch(
                 "
@@ -82,6 +101,7 @@ impl Cache {
                     id             TEXT PRIMARY KEY,
                     node_type      TEXT NOT NULL,
                     path           TEXT NOT NULL,
+                    title          TEXT NOT NULL,
                     created        TEXT NOT NULL DEFAULT '',
                     status         TEXT,
                     priority       TEXT,
@@ -105,7 +125,11 @@ impl Cache {
                 );
                 ",
             )
-            .map_err(sqlite_err)
+            .map_err(sqlite_err)?;
+        if self.needs_rebuild {
+            self.conn.execute_batch("COMMIT;").map_err(sqlite_err)?;
+        }
+        Ok(())
     }
 
     /// Wipe the cache and rebuild it from scratch by re-scanning and re-parsing
@@ -150,8 +174,8 @@ impl Cache {
                 "INSERT INTO nodes
                     (id, node_type, path, created, status, priority, scheduled_date, due_date,
                      deleted_at, has_project, parent_project, distillation_level, event_start,
-                     resolved, domain, tags, body, is_template)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                     resolved, domain, tags, body, is_template, title)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
                 rusqlite::params![
                     &parsed.node.id,
                     &node_type,
@@ -171,6 +195,7 @@ impl Cache {
                     &tags,
                     &parsed.body,
                     parsed.node.is_template as i64,
+                    crate::title::resolve_title(parsed.node.title.as_deref(), &parsed.body, &path),
                 ],
             )
             .map_err(sqlite_err)?;
@@ -184,6 +209,8 @@ impl Cache {
             }
         }
 
+        tx.pragma_update(None, "user_version", CACHE_SCHEMA_VERSION)
+            .map_err(sqlite_err)?;
         tx.commit().map_err(sqlite_err)
     }
 
@@ -228,6 +255,7 @@ impl Cache {
         let rows = stmt
             .query_map(params, |row| {
                 Ok(CachedNode {
+                    title: row.get("title")?,
                     id: row.get("id")?,
                     node_type: row.get("node_type")?,
                     path: row.get("path")?,

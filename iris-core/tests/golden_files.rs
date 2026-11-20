@@ -11,6 +11,11 @@ use std::fs;
 use std::path::Path;
 
 #[test]
+fn golden_file_round_trip_titled_note() {
+    assert_round_trip("tests/fixtures/titled-note.md");
+}
+
+#[test]
 fn golden_file_round_trip_simple_note() {
     assert_round_trip("tests/fixtures/simple-note.md");
 }

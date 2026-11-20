@@ -533,6 +533,11 @@ void uniffi_iris_core_fn_method_ffiengine_update_node_with_body(uint64_t ptr, Ru
 RustBuffer uniffi_iris_core_fn_method_ffiengine_vault_root(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_DISPLAY_TITLE
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_DISPLAY_TITLE
+RustBuffer uniffi_iris_core_fn_func_display_title(RustBuffer title, RustBuffer body, RustBuffer path, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_RESTORE_FROM_BACKUP
 #define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_FN_FUNC_RESTORE_FROM_BACKUP
 RustBuffer uniffi_iris_core_fn_func_restore_from_backup(RustBuffer remote_url, RustBuffer dest_path, RustCallStatus *_Nonnull out_status
@@ -824,6 +829,12 @@ void ffi_iris_core_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_IRIS_CORE_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_IRIS_CORE_RUST_FUTURE_COMPLETE_VOID
 void ffi_iris_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_DISPLAY_TITLE
+#define UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_DISPLAY_TITLE
+uint16_t uniffi_iris_core_checksum_func_display_title(void
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IRIS_CORE_CHECKSUM_FUNC_RESTORE_FROM_BACKUP

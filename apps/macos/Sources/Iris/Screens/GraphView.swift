@@ -245,7 +245,7 @@ struct GraphView: View {
     }
 
     private func titleFor(_ node: CachedNode) -> String {
-        (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        node.title
     }
 
     // MARK: - Data

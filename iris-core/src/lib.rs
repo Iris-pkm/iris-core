@@ -24,6 +24,7 @@ pub mod parser;
 pub mod plugins;
 pub mod recurrence;
 pub mod search;
+pub mod title;
 pub mod types;
 pub mod vault;
 pub mod views;

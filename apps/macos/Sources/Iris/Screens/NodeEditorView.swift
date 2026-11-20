@@ -249,10 +249,8 @@ struct NodeEditorView: View {
         }
     }
 
-    /// No dedicated `title` field in the schema yet — the file's basename
-    /// stands in, same stand-in `search.rs`/`Sidebar` already use.
     private func titleFor(_ node: FfiNode?) -> String {
-        (relPath as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        displayTitle(title: node?.title, body: parsed?.body ?? "", path: relPath)
     }
 
     private func addTag() {

@@ -115,13 +115,18 @@ impl Engine {
         let vault = Vault::open(path.as_ref())?;
         let git = GitRepo::open(vault.root())?;
         let cache = Cache::open(vault.root().join(".iris/cache.sqlite"))?;
-        Ok(Engine {
+        let needs_rebuild = cache.needs_rebuild;
+        let mut engine = Engine {
             vault,
             cache,
             git,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-        })
+        };
+        if needs_rebuild {
+            engine.rebuild_cache()?;
+        }
+        Ok(engine)
     }
 
     /// Create a new node file and commit it.
@@ -863,6 +868,7 @@ impl Engine {
 fn new_annotation(target_id: crate::types::NodeId, text_fragment: Option<String>) -> Node {
     let now = Utc::now();
     Node {
+        title: None,
         id: crate::types::new_node_id(),
         node_type: crate::types::NodeType::Annotation,
         created: now,
@@ -968,6 +974,7 @@ mod tests {
 
     fn sample_node() -> Node {
         Node {
+            title: None,
             id: new_node_id(),
             node_type: NodeType::Note,
             created: Utc::now(),

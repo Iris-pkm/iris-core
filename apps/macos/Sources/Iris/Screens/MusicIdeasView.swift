@@ -26,5 +26,5 @@ struct MusicIdeasView: View {
         }.padding(Space.md).background(c.bgSurface).overlay(RoundedRectangle(cornerRadius: Radius.lg).stroke(c.borderDefault, lineWidth: 1)).clipShape(RoundedRectangle(cornerRadius: Radius.lg))
     }
     private func tag(_ text: String) -> some View { Text(text).font(Typography.caption()).foregroundStyle(c.textSecondary).padding(.horizontal, Space.sm).padding(.vertical, Space.xxs).background(c.bgHover).clipShape(Capsule()) }
-    private func title(_ node: CachedNode) -> String { (node.path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "") }
+    private func title(_ node: CachedNode) -> String { node.title }
 }

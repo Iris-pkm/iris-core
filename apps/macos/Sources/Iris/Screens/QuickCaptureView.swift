@@ -160,6 +160,7 @@ struct QuickCaptureView: View {
         let now = ISO8601DateFormatter().string(from: Date())
         let today = LocalDay.today()
         let node = FfiNode(
+            title: nil,
             id: id, nodeType: .task, created: now, modified: now,
             schemaVersion: currentSchemaVersion(), lifecycle: nil, archivedAt: nil,
             domain: nil, tags: [], relations: [], deletedAt: nil, isTemplate: false,
